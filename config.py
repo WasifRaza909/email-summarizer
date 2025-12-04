@@ -63,17 +63,19 @@ def validate_config():
     if not GEMINI_API_KEY:
         errors.append("❌ GEMINI_API_KEY not found in .env file")
     
-    # Check credentials in common locations (current dir or AppData)
-    cred_path = GMAIL_CREDENTIALS_FILE
-    if not os.path.exists(cred_path):
-        # Check AppData fallback
-        appdata = os.getenv('APPDATA') or os.path.expanduser('~')
-        app_cred = os.path.join(appdata, 'email-summarizer', 'credentials.json')
-        if os.path.exists(app_cred):
-            # allow the app to pick up credentials from AppData
-            GMAIL_CREDENTIALS_FILE = app_cred
-        else:
-            errors.append(f"❌ {GMAIL_CREDENTIALS_FILE} not found - You cannot login to Gmail!")
+    # Check credentials in priority order: AppData first, then project folder
+    appdata = os.getenv('APPDATA') or os.path.expanduser('~')
+    app_cred = os.path.join(appdata, 'email-summarizer', 'credentials.json')
+    
+    if os.path.exists(app_cred):
+        # AppData location takes priority (set by setup screen)
+        GMAIL_CREDENTIALS_FILE = app_cred
+    elif os.path.exists(GMAIL_CREDENTIALS_FILE):
+        # Fall back to project folder
+        pass
+    else:
+        # Not found anywhere
+        errors.append(f"❌ {GMAIL_CREDENTIALS_FILE} not found - You cannot login to Gmail!")
     
     if errors or warnings:
         print("\n" + "="*50)

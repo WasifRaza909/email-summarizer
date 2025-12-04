@@ -1,16 +1,21 @@
 import customtkinter as ctk
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 import threading
 from concurrent.futures import ThreadPoolExecutor
 import os
 import pickle
+import json
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 import requests
 import base64
 import re
 from html.parser import HTMLParser
+from pathlib import Path
+import webbrowser
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from urllib.parse import urlparse, parse_qs
 
 # ========== IMPORT CENTRALIZED CONFIG ==========
 try:
@@ -190,41 +195,48 @@ def strip_html_tags(html):
     except:
         return html
 
+def get_email_subject(service, message_id):
+    """Get email subject and sender from message metadata"""
+    try:
+        message = service.users().messages().get(userId='me', id=message_id, format='metadata').execute()
+        headers = message.get('payload', {}).get('headers', [])
+        subject = next((h['value'] for h in headers if h.get('name') == 'Subject'), "No Subject")
+        sender = next((h['value'] for h in headers if h.get('name') == 'From'), "Unknown")
+        return subject, sender
+    except Exception as e:
+        return "Error", str(e)
+
 def get_email_body_raw(service, message_id):
+    """Get the full email body/content"""
     try:
         message = service.users().messages().get(userId='me', id=message_id, format='full').execute()
         
+        # Try to get text part first, then html
+        parts = message.get('payload', {}).get('parts', [])
         body = ""
-        if 'parts' in message['payload']:
-            for part in message['payload']['parts']:
-                if part['mimeType'] == 'text/plain':
-                    data = part['body'].get('data', '')
-                    if data:
-                        body = base64.urlsafe_b64decode(data).decode('utf-8')
-                        break
-                elif part['mimeType'] == 'text/html':
-                    data = part['body'].get('data', '')
-                    if data:
-                        html_body = base64.urlsafe_b64decode(data).decode('utf-8')
-                        body = strip_html_tags(html_body)
-        else:
-            data = message['payload']['body'].get('data', '')
+        
+        for part in parts:
+            if part['mimeType'] == 'text/plain':
+                data = part.get('body', {}).get('data', '')
+                if data:
+                    body = base64.urlsafe_b64decode(data).decode('utf-8')
+                    break
+            elif part['mimeType'] == 'text/html':
+                data = part.get('body', {}).get('data', '')
+                if data:
+                    html_content = base64.urlsafe_b64decode(data).decode('utf-8')
+                    body = strip_html_tags(html_content)
+        
+        # Fallback: try to get body from payload directly
+        if not body:
+            payload = message.get('payload', {})
+            data = payload.get('body', {}).get('data', '')
             if data:
                 body = base64.urlsafe_b64decode(data).decode('utf-8')
         
         return body[:2000] if body else ""
     except Exception as e:
         return f"Error reading email: {str(e)}"
-
-def get_email_subject(service, message_id):
-    try:
-        message = service.users().messages().get(userId='me', id=message_id, format='metadata').execute()
-        headers = message['payload']['headers']
-        subject = next((h['value'] for h in headers if h['name'] == 'Subject'), "No Subject")
-        sender = next((h['value'] for h in headers if h['name'] == 'From'), "Unknown")
-        return subject, sender
-    except Exception as e:
-        return "Error", str(e)
 
 def gemini_summarize_and_reply(body):
     try:
@@ -246,9 +258,11 @@ Email:
 {body}
 """
         
+        # Include API key in the URL for Gemini API (read from config module)
+        api_url = f"{GEMINI_ENDPOINT}?key={config.GEMINI_API_KEY}"
+        
         headers = {
-            "Content-Type": "application/json",
-            "x-goog-api-key": GEMINI_API_KEY
+            "Content-Type": "application/json"
         }
         
         payload = {
@@ -265,7 +279,7 @@ Email:
             }
         }
         
-        response = requests.post(GEMINI_ENDPOINT, headers=headers, json=payload)
+        response = requests.post(api_url, headers=headers, json=payload)
         
         resp_json = response.json()
         
@@ -361,7 +375,565 @@ class EmailListItem(ctk.CTkFrame):
         # Return to default styling
         self.main_frame.configure(fg_color=COLOR_SURFACE, border_color=COLOR_BORDER)
         self.subject_label_ref.configure(text_color=COLOR_PRIMARY)
-        self.sender_label_ref.configure(text_color=COLOR_TEXT_SECONDARY)
+
+
+# ========== SETUP SCREEN ==========
+class SetupScreen(ctk.CTkToplevel):
+    """First-time setup wizard for credentials and API keys"""
+    
+    def __init__(self, parent, is_change_mode=False):
+        super().__init__(parent)
+        self.is_change_mode = is_change_mode
+        
+        if is_change_mode:
+            self.title("Email Summarizer Pro - Change Credentials")
+        else:
+            self.title("Email Summarizer Pro - Initial Setup")
+        
+        self.geometry("600x700")
+        self.resizable(False, False)
+        self.configure(fg_color=COLOR_BG)
+        
+        # Make it modal
+        self.transient(parent)
+        self.grab_set()
+        
+        # Center on parent
+        self.update_idletasks()
+        x = parent.winfo_x() + (parent.winfo_width() // 2) - 300
+        y = parent.winfo_y() + (parent.winfo_height() // 2) - 350
+        self.geometry(f"+{x}+{y}")
+        
+        self.credentials_file_path = None
+        self.result = {"api_key": "", "credentials_file": None}
+        
+        # Handle close button (X) - prompt before closing
+        self.protocol("WM_DELETE_WINDOW", self.on_window_close)
+        
+        self.create_setup_ui()
+    
+    def on_window_close(self):
+        """Handle window close button (X) - ask user before closing"""
+        response = messagebox.askyesno(
+            "Close Setup",
+            "Close without saving credentials?\n\n"
+            "Use 'Skip Setup' or 'Change Credentials' button to close properly."
+        )
+        if response:
+            self.destroy()
+    
+    def create_setup_ui(self):
+        """Create the setup UI"""
+        # Main container with padding
+        container = ctk.CTkFrame(self, fg_color=COLOR_BG)
+        container.pack(fill="both", expand=True, padx=30, pady=30)
+        
+        # Title based on mode
+        if self.is_change_mode:
+            title_text = "🔄 Update Your Credentials"
+            subtitle_text = "Change your API key or Gmail credentials"
+        else:
+            title_text = "🚀 Welcome to Email Summarizer Pro"
+            subtitle_text = "Let's get you set up in 2 minutes"
+        
+        # Title
+        title = ctk.CTkLabel(
+            container,
+            text=title_text,
+            font=("Segoe UI", 18, "bold"),
+            text_color=COLOR_PRIMARY
+        )
+        title.pack(pady=(0, 10))
+        
+        # Subtitle
+        subtitle = ctk.CTkLabel(
+            container,
+            text=subtitle_text,
+            font=("Segoe UI", 12),
+            text_color="#A0A0A0"
+        )
+        subtitle.pack(pady=(0, 25))
+        
+        # ===== SECTION 1: API KEY =====
+        api_section = ctk.CTkFrame(container, fg_color=COLOR_SURFACE, corner_radius=8)
+        api_section.pack(fill="x", pady=(0, 20))
+        
+        api_title = ctk.CTkLabel(
+            api_section,
+            text="1️⃣  Enter Your Gemini/OpenAI API Key",
+            font=("Segoe UI", 13, "bold"),
+            text_color=COLOR_PRIMARY
+        )
+        api_title.pack(anchor="w", padx=15, pady=(15, 5))
+        
+        api_desc = ctk.CTkLabel(
+            api_section,
+            text="Get it from: https://aistudio.google.com/app/apikey",
+            font=("Segoe UI", 10),
+            text_color="#808080"
+        )
+        api_desc.pack(anchor="w", padx=15, pady=(0, 10))
+        
+        self.api_entry = ctk.CTkEntry(
+            api_section,
+            placeholder_text="sk-... or AIzaSy...",
+            height=45,
+            font=("Segoe UI", 11),
+            fg_color=COLOR_BG,
+            border_color=COLOR_BORDER,
+            border_width=1,
+            show="•"  # Hide API key for security
+        )
+        self.api_entry.pack(fill="x", padx=15, pady=(0, 15))
+        
+        # ===== SECTION 2: CREDENTIALS FILE =====
+        cred_section = ctk.CTkFrame(container, fg_color=COLOR_SURFACE, corner_radius=8)
+        cred_section.pack(fill="x", pady=(0, 20))
+        
+        cred_title = ctk.CTkLabel(
+            cred_section,
+            text="2️⃣  Upload Your Google credentials.json",
+            font=("Segoe UI", 13, "bold"),
+            text_color=COLOR_PRIMARY
+        )
+        cred_title.pack(anchor="w", padx=15, pady=(15, 5))
+        
+        cred_desc = ctk.CTkLabel(
+            cred_section,
+            text="Download from: Google Cloud Console → OAuth 2.0 Desktop",
+            font=("Segoe UI", 10),
+            text_color="#808080"
+        )
+        cred_desc.pack(anchor="w", padx=15, pady=(0, 10))
+        
+        # File selection button
+        button_frame = ctk.CTkFrame(cred_section, fg_color=COLOR_SURFACE)
+        button_frame.pack(fill="x", padx=15, pady=(0, 15))
+        
+        self.upload_btn = ctk.CTkButton(
+            button_frame,
+            text="📁 Select credentials.json",
+            command=self.select_credentials_file,
+            fg_color=COLOR_PRIMARY,
+            hover_color="#1565C0",
+            text_color="#FFFFFF",
+            height=40,
+            font=("Segoe UI", 11, "bold")
+        )
+        self.upload_btn.pack(side="left", fill="x", expand=True)
+        
+        self.file_status = ctk.CTkLabel(
+            button_frame,
+            text="❌ Not selected",
+            font=("Segoe UI", 10),
+            text_color="#FF6B6B"
+        )
+        self.file_status.pack(side="right", padx=(10, 0))
+        
+        # ===== SECURITY INFO =====
+        security_section = ctk.CTkFrame(container, fg_color="#1B5E20", corner_radius=8)
+        security_section.pack(fill="x", pady=(0, 20))
+        
+        security_title = ctk.CTkLabel(
+            security_section,
+            text="🔒 Your Privacy is Protected",
+            font=("Segoe UI", 12, "bold"),
+            text_color="#4CAF50"
+        )
+        security_title.pack(anchor="w", padx=15, pady=(12, 5))
+        
+        security_text = ctk.CTkLabel(
+            security_section,
+            text="✓ We do NOT store any credentials on servers\n✓ All data remains on your computer only\n✓ Direct connection to Gmail & Google APIs",
+            font=("Segoe UI", 10),
+            text_color="#C8E6C9",
+            justify="left"
+        )
+        security_text.pack(anchor="w", padx=15, pady=(0, 12))
+        
+        # ===== BUTTONS =====
+        button_frame = ctk.CTkFrame(container, fg_color=COLOR_BG)
+        button_frame.pack(fill="x", pady=(20, 0))
+        
+        self.save_btn = ctk.CTkButton(
+            button_frame,
+            text="✓ Save & Continue",
+            command=self.save_settings,
+            fg_color=COLOR_PRIMARY,
+            hover_color="#1565C0",
+            text_color="#FFFFFF",
+            height=40,
+            font=("Segoe UI", 12, "bold")
+        )
+        self.save_btn.pack(fill="x", pady=(0, 10))
+        
+        self.skip_btn = ctk.CTkButton(
+            button_frame,
+            text="⊘ Skip Setup",
+            command=self.skip_setup,
+            fg_color="#424242",
+            hover_color="#616161",
+            text_color="#FFFFFF",
+            height=35,
+            font=("Segoe UI", 11)
+        )
+        self.skip_btn.pack(fill="x")
+    
+    def select_credentials_file(self):
+        """Open file dialog to select credentials.json"""
+        file_path = filedialog.askopenfilename(
+            title="Select credentials.json",
+            filetypes=[("JSON Files", "*.json"), ("All Files", "*.*")],
+            initialdir=os.path.expanduser("~")
+        )
+        
+        if file_path:
+            try:
+                # Validate it's a valid JSON and has expected Gmail structure
+                with open(file_path, 'r') as f:
+                    data = json.load(f)
+                    if 'installed' in data or 'web' in data:
+                        self.credentials_file_path = file_path
+                        filename = os.path.basename(file_path)
+                        self.file_status.configure(text=f"✓ {filename}", text_color="#4CAF50")
+                        self.upload_btn.configure(text="📁 Change File")
+                    else:
+                        messagebox.showerror("Invalid File", "This doesn't appear to be a valid OAuth credentials file")
+            except json.JSONDecodeError:
+                messagebox.showerror("Invalid JSON", "The selected file is not a valid JSON file")
+            except Exception as e:
+                messagebox.showerror("Error", f"Error reading file: {str(e)}")
+    
+    def save_settings(self):
+        """Save settings and close - ONLY if both API key and credentials are provided"""
+        api_key = self.api_entry.get().strip()
+        
+        # Validate API key
+        if not api_key:
+            messagebox.showwarning("Missing API Key", "❌ Please enter your Gemini API key")
+            self.api_entry.focus()
+            return
+        
+        # Validate credentials file
+        if not self.credentials_file_path:
+            messagebox.showwarning(
+                "Missing Credentials File", 
+                "❌ Please select your credentials.json file\n\n"
+                "If you don't have it yet, you can:\n"
+                "1. Get it from Google Cloud Console\n"
+                "2. Set it up later using 'Change Credentials'"
+            )
+            return
+        
+        # Validate API key by testing it
+        self.api_entry.configure(state="disabled")
+        messagebox.showinfo("Testing API Key", "Testing your API key... Please wait.")
+        
+        if not self.test_gemini_api_key(api_key):
+            self.api_entry.configure(state="normal")
+            messagebox.showerror(
+                "❌ Invalid API Key",
+                "The API key you provided is invalid or not working.\n\n"
+                "Please check:\n"
+                "1. The key is correct and not expired\n"
+                "2. The key is enabled on Google Cloud Console\n"
+                "3. Gemini API is enabled for your project\n\n"
+                "Get a key from: https://aistudio.google.com/app/apikey"
+            )
+            self.api_entry.focus()
+            return
+        
+        self.api_entry.configure(state="normal")
+        
+        # Everything is valid - save settings
+        try:
+            # Create AppData folder if it doesn't exist
+            app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
+            app_data_path.mkdir(parents=True, exist_ok=True)
+            
+            # Save API key to .env
+            env_file = app_data_path / ".env"
+            with open(env_file, 'w') as f:
+                f.write(f"GEMINI_API_KEY={api_key}\n")
+            
+            # Copy credentials file
+            cred_dest = app_data_path / "credentials.json"
+            with open(self.credentials_file_path, 'r') as src:
+                with open(cred_dest, 'w') as dst:
+                    dst.write(src.read())
+            
+            # Create a marker file to indicate setup is complete
+            setup_marker = app_data_path / ".setup_complete"
+            setup_marker.touch()
+            
+            # Update global config with new paths
+            import config as config_module
+            config_module.GMAIL_CREDENTIALS_FILE = str(cred_dest)
+            config_module.GEMINI_API_KEY = api_key
+            
+            messagebox.showinfo(
+                "✓ Setup Complete",
+                "✓ Settings saved!\n\nYour credentials are stored securely on your computer.\nClick OK to continue."
+            )
+            self.result = {"api_key": api_key, "credentials_file": str(cred_dest)}
+            self.destroy()
+        
+        except Exception as e:
+            messagebox.showerror("❌ Save Error", f"Failed to save settings: {str(e)}")
+    
+    def test_gemini_api_key(self, api_key):
+        """Test if the Gemini API key is valid"""
+        try:
+            import requests
+            
+            test_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+            
+            test_payload = {
+                "contents": [
+                    {
+                        "parts": [
+                            {"text": "Hello"}
+                        ]
+                    }
+                ]
+            }
+            
+            headers = {"Content-Type": "application/json"}
+            
+            response = requests.post(test_url, headers=headers, json=test_payload, timeout=5)
+            resp_json = response.json()
+            
+            # Check if response indicates success or invalid key
+            if 'error' in resp_json:
+                error_msg = resp_json['error'].get('message', '').lower()
+                if 'unauthenticated' in error_msg or 'invalid' in error_msg or 'unregistered' in error_msg:
+                    return False
+            
+            # If we got here, key is likely valid
+            return True
+        
+        except Exception as e:
+            return False
+    
+    def skip_setup(self):
+        """Skip setup - prompt varies based on what user entered"""
+        api_key = self.api_entry.get().strip()
+        has_creds_file = bool(self.credentials_file_path)
+        
+        # Case 1: User hasn't entered ANYTHING - offer to skip with warning
+        if not api_key and not has_creds_file:
+            response = messagebox.askyesno(
+                "⚠️ Skip Setup",
+                "Are you sure? Without credentials, you won't be able to:\n"
+                "• Log in to Gmail\n"
+                "• Summarize emails\n\n"
+                "You can set them up anytime using 'Change Credentials'.\n\n"
+                "Skip setup anyway?"
+            )
+            if response:
+                self.destroy()
+            return
+        
+        # Case 2: User entered API key but no credentials file
+        if api_key and not has_creds_file:
+            response = messagebox.askyesno(
+                "⚠️ Skip Setup",
+                "You've entered your API key but haven't selected credentials.json\n\n"
+                "Without Gmail credentials, you won't be able to:\n"
+                "• Log in to Gmail\n"
+                "• Load or summarize emails\n\n"
+                "Options:\n"
+                "• Click 'No' to select credentials file\n"
+                "• Click 'Yes' to skip and add credentials later\n\n"
+                "Skip and add credentials later?"
+            )
+            if response:
+                self.destroy()
+            return
+        
+        # Case 3: User selected credentials but no API key
+        if not api_key and has_creds_file:
+            response = messagebox.askyesno(
+                "⚠️ Skip Setup",
+                "You've selected credentials.json but haven't entered your API key\n\n"
+                "Without an API key, you won't be able to:\n"
+                "• Summarize emails using AI\n"
+                "• Use the smart summarization feature\n\n"
+                "Options:\n"
+                "• Click 'No' to enter your API key\n"
+                "• Click 'Yes' to skip and add API key later\n\n"
+                "Skip and add API key later?"
+            )
+            if response:
+                self.destroy()
+            return
+        
+        # Case 4: User entered BOTH - shouldn't reach here, but just in case
+        # This would mean they should click Save instead of Skip
+        messagebox.showinfo(
+            "ℹ️ Ready to Save",
+            "You've entered both your API key and selected credentials.json!\n\n"
+            "Please click '✓ Save & Continue' to save your settings.\n\n"
+            "If you want to skip setup anyway, clear one of the fields first."
+        )
+
+# ========== LOGIN MONITOR WINDOW ==========
+class LoginMonitorWindow(ctk.CTkToplevel):
+    """Modal window that monitors OAuth login progress and detects completion"""
+    
+    def __init__(self, parent, flow_callback):
+        super().__init__(parent)
+        self.title("Email Summarizer Pro - Signing In")
+        self.geometry("450x250")
+        self.resizable(False, False)
+        self.configure(fg_color=COLOR_BG)
+        
+        # Make it modal
+        self.transient(parent)
+        self.grab_set()
+        
+        # Center on parent
+        self.update_idletasks()
+        x = parent.winfo_x() + (parent.winfo_width() // 2) - 225
+        y = parent.winfo_y() + (parent.winfo_height() // 2) - 125
+        self.geometry(f"+{x}+{y}")
+        
+        self.flow_callback = flow_callback
+        self.login_complete = False
+        self.need_retry = False
+        self.protocol("WM_DELETE_WINDOW", self.on_cancel)
+        
+        self.create_ui()
+        self.start_monitoring()
+    
+    def create_ui(self):
+        """Create the monitoring UI"""
+        container = ctk.CTkFrame(self, fg_color=COLOR_BG)
+        container.pack(fill="both", expand=True, padx=30, pady=30)
+        
+        # Title
+        title = ctk.CTkLabel(
+            container,
+            text="🔐 Signing In...",
+            font=("Segoe UI", 18, "bold"),
+            text_color=COLOR_PRIMARY
+        )
+        title.pack(pady=(0, 15))
+        
+        # Instructions
+        instructions = ctk.CTkLabel(
+            container,
+            text="A browser window has opened.\n\n"
+                 "Complete the Google sign-in process.\n"
+                 "This window will close automatically when login is complete.",
+            font=("Segoe UI", 11),
+            text_color=COLOR_TEXT,
+            justify="center",
+            wraplength=400
+        )
+        instructions.pack(pady=(0, 25))
+        
+        # Progress animation
+        progress_frame = ctk.CTkFrame(container, fg_color=COLOR_BG)
+        progress_frame.pack(fill="x", pady=(0, 20))
+        
+        self.progress_bar = ctk.CTkProgressBar(
+            progress_frame,
+            fg_color=COLOR_SURFACE_DARK,
+            progress_color=COLOR_PRIMARY,
+            height=4,
+            corner_radius=2
+        )
+        self.progress_bar.pack(fill="x")
+        self.progress_bar.set(0)
+        
+        # Status label
+        self.status_label = ctk.CTkLabel(
+            container,
+            text="⏳ Waiting for browser...",
+            font=("Segoe UI", 10),
+            text_color=COLOR_TEXT_SECONDARY
+        )
+        self.status_label.pack()
+        
+        # Cancel button
+        button_container = ctk.CTkFrame(container, fg_color=COLOR_BG)
+        button_container.pack(fill="x", pady=(20, 0))
+        
+        retry_btn = ctk.CTkButton(
+            button_container,
+            text="🔄 Retry",
+            command=self.on_retry,
+            fg_color=COLOR_PRIMARY,
+            hover_color=COLOR_PRIMARY_DARK,
+            text_color="#FFFFFF",
+            font=("Segoe UI", 10),
+            height=32,
+            corner_radius=5
+        )
+        retry_btn.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        
+        cancel_btn = ctk.CTkButton(
+            button_container,
+            text="✕ Cancel",
+            command=self.on_cancel,
+            fg_color="#CCCCCC",
+            hover_color="#B0B0B0",
+            text_color=COLOR_TEXT,
+            font=("Segoe UI", 10),
+            height=32,
+            corner_radius=5
+        )
+        cancel_btn.pack(side="left", fill="x", expand=True)
+    
+    def start_monitoring(self):
+        """Start monitoring for login completion"""
+        self.check_login_count = 0
+        self.animate_progress()
+    
+    def animate_progress(self):
+        """Animate progress bar and check for login completion"""
+        if not self.login_complete and self.winfo_exists():
+            # Animate progress bar
+            current = self.progress_bar.get()
+            self.progress_bar.set((current + 0.05) % 1.0)
+            
+            # Check if login completed
+            if self.check_login_count % 4 == 0:  # Check every 2 seconds
+                self.check_login_callback()
+            
+            self.check_login_count += 1
+            self.after(500, self.animate_progress)
+    
+    def check_login_callback(self):
+        """Call the flow callback to check for login completion"""
+        try:
+            result = self.flow_callback()
+            if result:  # Login completed
+                self.login_complete = True
+                self.status_label.configure(text="✓ Login successful!")
+                self.progress_bar.set(1.0)
+                self.after(500, self.destroy)
+        except Exception:
+            pass
+    
+    def on_cancel(self):
+        """User cancelled login - mark as cancelled and close"""
+        self.login_complete = True  # Mark as complete so it stops checking
+        self.status_label.configure(text="✓ Login cancelled")
+        self.destroy()
+    
+    def on_retry(self):
+        """User wants to retry - open browser again"""
+        try:
+            if hasattr(self, 'auth_url'):
+                webbrowser.open(self.auth_url)
+                self.status_label.configure(text="⏳ Waiting for browser...")
+                self.need_retry = True
+                # Reset counters to keep monitoring
+                self.check_login_count = 0
+        except Exception:
+            pass
 
 # ========== MAIN APP ==========
 ctk.set_appearance_mode("light")
@@ -383,8 +955,51 @@ class EmailSummarizerApp(ctk.CTk):
         self.max_emails = 5
         self.summarize_on_load = tk.BooleanVar(value=False)  # Toggle: lazy vs eager
         
+        # Check if first-time setup is needed
+        self.check_first_time_setup()
+        
         self.create_widgets()
         self.check_login_status()
+    
+    def check_first_time_setup(self):
+        """Check if credentials/API key are missing and show setup screen if needed"""
+        try:
+            app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
+            setup_marker = app_data_path / ".setup_complete"
+            credentials_path = app_data_path / "credentials.json"
+            env_file_path = app_data_path / ".env"
+            
+            # Check if credentials.json exists (in project or AppData)
+            cred_exists = os.path.exists(config.GMAIL_CREDENTIALS_FILE) or credentials_path.exists()
+            
+            # Check if API key exists and is valid
+            api_key_exists = bool(config.GEMINI_API_KEY and config.GEMINI_API_KEY.strip())
+            
+            # Show setup if credentials or API key missing (always check, not just first time)
+            if not cred_exists or not api_key_exists:
+                setup_screen = SetupScreen(self)
+                self.wait_window(setup_screen)
+                
+                # After setup, reload .env and config to pick up new values
+                from dotenv import load_dotenv
+                load_dotenv(env_file_path, override=True)
+                
+                # Reload config module to get updated values
+                import importlib
+                importlib.reload(config)
+                
+                # Refresh the login status to re-enable Load button if credentials are now valid
+                self.after(100, self.check_login_status)
+                
+                # Mark setup as complete
+                try:
+                    app_data_path.mkdir(parents=True, exist_ok=True)
+                    setup_marker.touch()
+                except:
+                    pass
+        except Exception as e:
+            # Silently skip if there's an error
+            pass
     
     def create_widgets(self):
         # ===== HEADER =====
@@ -545,6 +1160,24 @@ class EmailSummarizerApp(ctk.CTk):
         )
         self.logout_btn.pack(side="left", padx=4)
         
+        # Divider
+        divider4 = ctk.CTkFrame(left_buttons, fg_color=COLOR_BORDER, width=1, height=35)
+        divider4.pack(side="left", padx=6)
+        
+        self.change_creds_btn = ctk.CTkButton(
+            left_buttons,
+            text="🔑 Change Credentials",
+            command=self.open_change_credentials,
+            fg_color="#6200EA",
+            hover_color="#5E35B1",
+            text_color="#FFFFFF",
+            font=("Segoe UI", FONT_MD, "bold"),
+            width=175,
+            height=40,
+            corner_radius=5
+        )
+        self.change_creds_btn.pack(side="left", padx=4)
+        
         # ===== MAIN CONTENT =====
         content = ctk.CTkFrame(self, fg_color=COLOR_BG)
         content.pack(fill="both", expand=True, padx=15, pady=15)
@@ -674,12 +1307,22 @@ class EmailSummarizerApp(ctk.CTk):
         self.progress_bar.set(0)
     
     def check_login_status(self):
+        # Get current API key from config (which may have been reloaded after setup)
+        current_api_key = config.GEMINI_API_KEY
+        
         if is_logged_in():
             self.status_label.configure(text="✓ Logged in - Ready to load emails")
             self.status_icon.configure(text="🟢")
             self.login_btn.configure(state="disabled", fg_color="#CCCCCC", hover_color="#CCCCCC")
-            self.load_btn.configure(state="normal", fg_color=COLOR_PRIMARY, hover_color=COLOR_PRIMARY_DARK)
+            
+            # Only enable load button if API key is also available
+            if current_api_key and current_api_key.strip():
+                self.load_btn.configure(state="normal", fg_color=COLOR_PRIMARY, hover_color=COLOR_PRIMARY_DARK)
+            else:
+                self.load_btn.configure(state="disabled", fg_color="#CCCCCC", hover_color="#CCCCCC")
+            
             self.logout_btn.configure(state="normal", fg_color=COLOR_ERROR, hover_color="#C5221F")
+            self.change_creds_btn.configure(state="normal", fg_color="#6200EA", hover_color="#5E35B1")
             self.service = self.get_service()
         else:
             self.status_label.configure(text="✗ Not logged in")
@@ -687,6 +1330,7 @@ class EmailSummarizerApp(ctk.CTk):
             self.login_btn.configure(state="normal", fg_color=COLOR_ACCENT, hover_color="#2D8E47")
             self.load_btn.configure(state="disabled", fg_color="#CCCCCC", hover_color="#CCCCCC")
             self.logout_btn.configure(state="disabled", fg_color="#CCCCCC", hover_color="#CCCCCC")
+            self.change_creds_btn.configure(state="normal", fg_color="#6200EA", hover_color="#5E35B1")
     
     def get_service(self):
         creds = load_credentials()
@@ -694,53 +1338,368 @@ class EmailSummarizerApp(ctk.CTk):
             return build('gmail', 'v1', credentials=creds)
         return None
     
-    def login(self):
-        try:
-            # Check if credentials.json exists
-            if not os.path.exists('credentials.json'):
-                messagebox.showerror(
-                    "Missing credentials.json",
-                    "❌ credentials.json not found!\n\n"
-                    "📋 Setup Instructions:\n"
-                    "1. Go to: https://console.cloud.google.com/\n"
-                    "2. Create a new project\n"
-                    "3. Enable Gmail API\n"
-                    "4. Create OAuth 2.0 Desktop credentials\n"
-                    "5. Download and save as 'credentials.json'\n"
-                    "6. Place the file in this directory\n"
-                    "7. Try login again\n\n"
-                    "👉 See SETUP_GUIDE.md for detailed steps"
+    def open_change_credentials(self):
+        """Open the setup screen to change credentials and API key"""
+        setup_screen = SetupScreen(self, is_change_mode=True)
+        self.wait_window(setup_screen)
+        
+        # Check if user actually saved changes (not just closed or skipped)
+        if setup_screen.result.get("api_key") or setup_screen.result.get("credentials_file"):
+            # User saved changes - reload config
+            try:
+                app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
+                env_file_path = app_data_path / ".env"
+                
+                from dotenv import load_dotenv
+                load_dotenv(env_file_path, override=True)
+                
+                # Reload config module
+                import importlib
+                importlib.reload(config)
+                
+                # Ask if they want to logout to apply new credentials
+                response = messagebox.askyesno(
+                    "✓ Credentials Updated",
+                    "✓ Credentials updated successfully!\n\n"
+                    "Do you want to logout now to use the new credentials?\n"
+                    "(You'll need to login again with the updated credentials)"
                 )
+                if response:
+                    self.logout(skip_confirm=True)  # Skip double confirmation
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to update credentials: {str(e)}")
+        # If user skipped or closed without saving, do nothing
+    
+    def login(self):
+        """Start login process in background thread to prevent UI freezing"""
+        # Disable login button to prevent multiple clicks
+        self.login_btn.configure(state="disabled", text="🔄 Logging in...")
+        
+        # Run login in background thread
+        thread = threading.Thread(target=self._login_thread, daemon=True)
+        thread.start()
+        # Start a watchdog in case the OAuth browser is closed and the flow blocks
+        try:
+            # clear previous watchdog if exists
+            if hasattr(self, "_login_watchdog_id") and self._login_watchdog_id:
+                self.after_cancel(self._login_watchdog_id)
+        except Exception:
+            pass
+        # Use short watchdogs to quickly detect if browser closes without successful login
+        try:
+            if hasattr(self, "_login_watchdog_id") and self._login_watchdog_id:
+                self.after_cancel(self._login_watchdog_id)
+        except Exception:
+            pass
+        # primary watchdog (30s) -- quick detection if browser closes
+        self._login_watchdog_id = self.after(30000, self._login_watchdog)
+        try:
+            if hasattr(self, "_login_fallback_id") and self._login_fallback_id:
+                self.after_cancel(self._login_fallback_id)
+        except Exception:
+            pass
+        # fallback watchdog (60s) -- final safety net
+        self._login_fallback_id = self.after(60000, self._login_watchdog)
+    
+    def _login_thread(self):
+        """Background thread for OAuth login flow"""
+        success = False
+        try:
+            # Resolve credentials path: prefer AppData, then config, then local
+            app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
+            appdata_cred = app_data_path / "credentials.json"
+            cred_path = None
+            
+            if appdata_cred.exists():
+                cred_path = str(appdata_cred)
+            elif os.path.exists(config.GMAIL_CREDENTIALS_FILE):
+                cred_path = config.GMAIL_CREDENTIALS_FILE
+            elif os.path.exists('credentials.json'):
+                cred_path = 'credentials.json'
+            
+            if not cred_path:
+                # Show setup screen on main thread
+                self.after(0, self._show_setup_for_missing_credentials)
                 return
             
-            flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
-            creds = flow.run_local_server(port=0)
-            save_credentials(creds)
-            self.check_login_status()
-            messagebox.showinfo("Success", "✓ Login successful!")
+            try:
+                flow = InstalledAppFlow.from_client_secrets_file(cred_path, SCOPES)
+                # Use custom, short-lived local server to capture auth code (non-blocking)
+                # Loop with short 5s checks to detect callback quickly OR browser closure instantly
+                creds = self._fetch_credentials_via_local_server(flow, timeout=5)
+
+                if creds is None:
+                    # Login did not complete within the wait window; likely the browser window
+                    # was closed or the user cancelled. Prompt the user to retry or cancel.
+                    self.after(0, self._prompt_login_not_completed)
+                    return
+
+                save_credentials(creds)
+                self.after(0, self.check_login_status)
+                self.after(0, lambda: messagebox.showinfo("Success", "✓ Login successful!"))
+                success = True
+            except (KeyboardInterrupt, SystemExit):
+                # User cancelled via Ctrl+C or closed window
+                self.after(0, lambda: messagebox.showwarning("Login Cancelled", "⚠️ Login was cancelled."))
+                return
+            except Exception as oauth_error:
+                error_str = str(oauth_error).lower()
+                # Handle user cancellation or browser close - catch common patterns
+                if any(x in error_str for x in ["expecting value", "json", "eoferror", "invalid_request", "connection", "cancelled", "abort", "timeout"]):
+                    self.after(0, lambda: messagebox.showwarning("Login Cancelled", "⚠️ Login was cancelled. Please try again and select your Google account."))
+                    return
+                else:
+                    raise
+                    
         except FileNotFoundError:
-            messagebox.showerror(
+            self.after(0, lambda: messagebox.showerror(
                 "credentials.json Error",
                 "❌ credentials.json file not found!\n\n"
                 "Please follow the setup guide in SETUP_GUIDE.md"
-            )
+            ))
         except Exception as e:
             error_msg = str(e)
             if "credentials.json" in error_msg or "not found" in error_msg.lower():
-                messagebox.showerror(
+                self.after(0, lambda: messagebox.showerror(
                     "Missing credentials.json",
                     "❌ credentials.json not found!\n\n"
                     "See SETUP_GUIDE.md for instructions."
-                )
+                ))
             else:
-                messagebox.showerror("Login Error", f"Login failed: {error_msg}")
+                self.after(0, lambda msg=error_msg: messagebox.showerror("Login Error", f"Login failed: {msg}"))
+        finally:
+            # Always reset login button if login didn't succeed
+            if not success:
+                self.after(0, lambda: self.login_btn.configure(state="normal", text="🔓 Login"))
+            else:
+                # If login succeeded, cancel watchdog if present
+                try:
+                    if hasattr(self, "_login_watchdog_id") and self._login_watchdog_id:
+                        self.after_cancel(self._login_watchdog_id)
+                        self._login_watchdog_id = None
+                except Exception:
+                    pass
+
+    def _login_watchdog(self):
+        """Reset login UI if OAuth flow hasn't completed in time."""
+        try:
+            # If login button still shows logging-in state, reset it
+            if getattr(self, 'login_btn', None):
+                try:
+                    # Force-reset regardless of current text/state
+                    self.login_btn.configure(state="normal", text="🔓 Login", fg_color=COLOR_ACCENT, hover_color="#2D8E47")
+                except Exception:
+                    try:
+                        self.login_btn.configure(state="normal", text="🔓 Login")
+                    except Exception:
+                        pass
+                # Provide a non-modal status update so the user isn't interrupted
+                try:
+                    self.after(50, lambda: self.progress_label.configure(text="⚠️ Login in progress — waiting for browser to complete."))
+                    self.after(50, lambda: self.status_label.configure(text="✗ Login pending in browser"))
+                except Exception:
+                    pass
+        finally:
+            try:
+                # clear watchdog ids
+                if hasattr(self, '_login_watchdog_id'):
+                    self._login_watchdog_id = None
+                if hasattr(self, '_login_fallback_id'):
+                    self._login_fallback_id = None
+            except Exception:
+                pass
+
+    def _fetch_credentials_via_local_server(self, flow, timeout=5):
+        """OAuth flow with modal monitoring window.
+        
+        Opens browser for OAuth, shows modal that monitors for completion,
+        detects when user successfully logs in or cancels.
+        
+        Returns credentials on success, or None on cancel/timeout.
+        """
+        # Define a simple handler to capture the GET with code
+        class _OAuthHandler(BaseHTTPRequestHandler):
+            def do_GET(self_inner):
+                params = parse_qs(urlparse(self_inner.path).query)
+                # store params on server
+                self_inner.server.auth_params = params
+                # respond with simple page
+                try:
+                    self_inner.send_response(200)
+                    self_inner.send_header('Content-type', 'text/html')
+                    self_inner.end_headers()
+                    self_inner.wfile.write(b"<html><body><h3>You can close this window and return to the app.</h3></body></html>")
+                except Exception:
+                    pass
+            def log_message(self_inner, format, *args):
+                return
+
+        # Start server on an ephemeral port
+        try:
+            server = HTTPServer(('localhost', 0), _OAuthHandler)
+        except Exception:
+            return None
+
+        port = server.server_port
+        # Set redirect URI for the flow
+        redirect_uri = f'http://localhost:{port}/'
+        flow.redirect_uri = redirect_uri
+
+        try:
+            auth_url, _ = flow.authorization_url(prompt='consent')
+        except Exception:
+            return None
+
+        # Open browser
+        try:
+            webbrowser.open(auth_url)
+        except Exception:
+            pass
+
+        # Callback function for monitor window to check login completion
+        auth_params_holder = {'params': None}
+        def check_login_completion():
+            """Check if OAuth callback received"""
+            try:
+                server.timeout = 0.5  # Non-blocking check
+                server.handle_request()
+            except Exception:
+                pass
+            
+            params = getattr(server, 'auth_params', None)
+            if params:
+                auth_params_holder['params'] = params
+                return True
+            return False
+
+        # Show modal window while monitoring for login
+        monitor_window = LoginMonitorWindow(self, check_login_completion)
+        monitor_window.auth_url = auth_url  # Store for retry
+        self.wait_window(monitor_window)
+
+        # Check if user wants to retry
+        if hasattr(monitor_window, 'need_retry') and monitor_window.need_retry:
+            # Close server and restart the whole flow
+            try:
+                server.server_close()
+            except Exception:
+                pass
+            # Recursively call to retry
+            return self._fetch_credentials_via_local_server(flow, timeout)
+
+        try:
+            server.server_close()
+        except Exception:
+            pass
+
+        params = auth_params_holder.get('params')
+        if not params:
+            # No callback received = login cancelled, browser closed, or failed
+            return None
+
+        code = None
+        if 'code' in params:
+            code = params['code'][0]
+        elif 'error' in params:
+            return None
+
+        if not code:
+            return None
+
+        # Fetch token using the obtained code
+        try:
+            flow.fetch_token(code=code)
+            return flow.credentials
+        except Exception:
+            return None
     
-    def logout(self):
-        if messagebox.askyesno("Confirm Logout", "Logout and delete cached credentials?"):
+    def _show_setup_for_missing_credentials(self):
+        """Show setup screen when credentials are missing (called from main thread)"""
+        # Ensure UI is reset before showing setup
+        try:
+            self.login_btn.configure(state="normal", text="🔓 Login")
+        except Exception:
+            pass
+        setup_screen = SetupScreen(self)
+        self.wait_window(setup_screen)
+        
+        # After setup, try to resolve credentials again
+        app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
+        appdata_cred = app_data_path / "credentials.json"
+        
+        if appdata_cred.exists() or os.path.exists(config.GMAIL_CREDENTIALS_FILE) or os.path.exists('credentials.json'):
+            # Credentials now exist, restart login
+            self.login()
+        else:
+            messagebox.showerror(
+                "Missing credentials.json",
+                "❌ credentials.json not found!\n\n"
+                "📋 Setup Instructions:\n"
+                "1. Go to: https://console.cloud.google.com/\n"
+                "2. Create a new project\n"
+                "3. Enable Gmail API\n"
+                "4. Create OAuth 2.0 Desktop credentials\n"
+                "5. Download and save as 'credentials.json'\n"
+                "6. Place the file in %APPDATA%\\email-summarizer or this directory\n"
+                "7. Try login again\n\n"
+                "👉 See SETUP_GUIDE.md for detailed steps"
+            )
+            try:
+                self.login_btn.configure(state="normal", text="🔓 Login")
+            except Exception:
+                pass
+
+    def _prompt_login_not_completed(self):
+        """Run on main thread: prompt the user when OAuth didn't complete.
+
+        If the user chooses to retry, restart the login flow. Otherwise reset UI.
+        """
+        try:
+            # Ask the user whether to retry login
+            response = messagebox.askyesno(
+                "Login Not Completed",
+                "It looks like the browser window was closed or the login did not complete.\n\nDo you want to retry login now?"
+            )
+            if response:
+                # Give a short delay to allow UI to reset, then restart login
+                try:
+                    self.login_btn.configure(state="normal", text="🔓 Login")
+                except Exception:
+                    pass
+                # Start login again
+                self.login()
+            else:
+                # Reset UI and status
+                try:
+                    self.login_btn.configure(state="normal", text="🔓 Login")
+                except Exception:
+                    pass
+                self.status_label.configure(text="✗ Not logged in")
+                self.status_icon.configure(text="🔴")
+        except Exception:
+            # Fallback: reset UI
+            try:
+                self.login_btn.configure(state="normal", text="🔓 Login")
+            except Exception:
+                pass
+            try:
+                self.status_label.configure(text="✗ Not logged in")
+                self.status_icon.configure(text="🔴")
+            except Exception:
+                pass
+    
+    def logout(self, skip_confirm=False):
+        """Logout and delete session token
+        
+        Args:
+            skip_confirm: If True, logout without asking confirmation (used when changing credentials)
+        """
+        if skip_confirm or messagebox.askyesno("Confirm Logout", "Logout and delete cached session token?"):
             delete_credentials()
             self.check_login_status()
             self.clear_emails()
-            messagebox.showinfo("Success", "✓ Logged out")
+            if not skip_confirm:
+                messagebox.showinfo("Success", "✓ Logged out")
     
     def clear_emails(self):
         for widget in self.email_list_frame.winfo_children():
@@ -761,6 +1720,17 @@ class EmailSummarizerApp(ctk.CTk):
     
     def load_emails(self):
         try:
+            # Check if API key is available BEFORE loading emails (read from config module, not global)
+            current_api_key = config.GEMINI_API_KEY
+            if not current_api_key or not current_api_key.strip():
+                messagebox.showerror(
+                    "❌ Missing API Key",
+                    "Cannot load emails without a valid Gemini API key.\n\n"
+                    "Please go to 'Change Credentials' to add your API key."
+                )
+                self.load_btn.configure(state="normal", text="📧 Load Emails")
+                return
+            
             self.load_btn.configure(state="disabled", text="⏳ Loading emails...")
             self.max_emails = int(self.email_count_var.get())
             
