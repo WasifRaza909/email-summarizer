@@ -6,10 +6,6 @@ Edit this file to add your API keys and settings
 import os
 import sys
 from dotenv import load_dotenv
-try:
-    import keyring
-except Exception:
-    keyring = None
 
 # Fix Unicode encoding for Windows
 if sys.platform == 'win32':
@@ -25,15 +21,7 @@ GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
 GMAIL_TOKEN_CACHE = 'token.pkl'  # Local cache for credentials
 
 # ========== GEMINI API CONFIGURATION ==========
-# First try environment, then fallback to keyring (if available)
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
-if not GEMINI_API_KEY and keyring:
-    try:
-        # Use application/service name 'email-summarizer'
-        GEMINI_API_KEY = keyring.get_password('email-summarizer', 'gemini_api_key') or ''
-    except Exception:
-        GEMINI_API_KEY = ''
-
 GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
 
 # Gemini settings
@@ -63,17 +51,8 @@ def validate_config():
     if not GEMINI_API_KEY:
         errors.append("❌ GEMINI_API_KEY not found in .env file")
     
-    # Check credentials in common locations (current dir or AppData)
-    cred_path = GMAIL_CREDENTIALS_FILE
-    if not os.path.exists(cred_path):
-        # Check AppData fallback
-        appdata = os.getenv('APPDATA') or os.path.expanduser('~')
-        app_cred = os.path.join(appdata, 'email-summarizer', 'credentials.json')
-        if os.path.exists(app_cred):
-            # allow the app to pick up credentials from AppData
-            GMAIL_CREDENTIALS_FILE = app_cred
-        else:
-            errors.append(f"❌ {GMAIL_CREDENTIALS_FILE} not found - You cannot login to Gmail!")
+    if not os.path.exists(GMAIL_CREDENTIALS_FILE):
+        errors.append(f"❌ {GMAIL_CREDENTIALS_FILE} not found - You cannot login to Gmail!")
     
     if errors or warnings:
         print("\n" + "="*50)
