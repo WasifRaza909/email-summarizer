@@ -174,37 +174,28 @@ docker run -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix email-summarizer
 
 ## ⚙️ Configuration
 
-### First Run Setup
-When you launch the app for the first time, you'll see the **Setup Screen**:
+### First Run Setup (AUTOMATIC)
+When you launch the app for the first time, the **Setup Screen** appears automatically:
 
-1. **Paste Gemini API Key**
+1. **Enter Gemini API Key**
    - Go to https://aistudio.google.com/app/apikey
-   - Copy your API key
-   - Paste it in the "Enter your Gemini/OpenAI API Key" field
-   - The app will validate it automatically
+   - Copy your API key (starts with `AIzaSy...`)
+   - Paste it in the setup window
+   - Click "Validate" - the app will check it automatically
 
-2. **Upload credentials.json**
+2. **Select credentials.json**
    - Click "📁 Select credentials.json"
-   - Navigate to your downloaded file
-   - Select it
-   - The path will be saved
+   - Navigate to your downloaded OAuth JSON file
+   - Select it - the path will be saved
 
-3. **Save & Continue**
-   - Click "✓ Save & Continue"
+3. **Click "✓ Save & Continue"**
    - The app is now configured and ready to use!
+   - Your settings are saved automatically
 
-### Manual Configuration (Advanced)
-
-If you need to manually edit `config.py`:
-
-```python
-# config.py
-GEMINI_API_KEY = "your-api-key-here"
-GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
-GMAIL_TOKEN_CACHE = "gmail_token.pkl"
-GMAIL_CREDENTIALS_FILE = "credentials.json"
-GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
-```
+### Important: Do NOT Edit config.py
+- ❌ DO NOT manually edit `config.py`
+- ✅ Use the app's Setup Screen instead (Settings → Change Credentials)
+- The app handles all configuration automatically
 
 ---
 
@@ -232,7 +223,7 @@ GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemin
 1. Click **"⚙️ Settings"** (gear icon in top-right)
 2. Click **"Change Credentials"**
 3. Follow the setup wizard again
-4. New credentials will be saved
+4. New credentials will be saved automatically
 
 ---
 

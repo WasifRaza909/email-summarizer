@@ -965,8 +965,8 @@ ctk.set_appearance_mode("dark")
 class EmailSummarizerApp(ctk.CTk):
     def __init__(self):
         super().__init__()
+        self.withdraw()  # Hide window while setting up
         self.title("Email Summarizer Pro")
-        self.geometry("1400x850")
         self.minsize(1100, 650)
         self.resizable(True, True)
         self.configure(fg_color=COLOR_BG)
@@ -986,8 +986,8 @@ class EmailSummarizerApp(ctk.CTk):
         self.create_widgets()
         self.check_login_status()
         
-        # Set to fullscreen at the very end, after everything is ready
-        self.after(200, self._apply_fullscreen)
+        # Schedule window to show at fullscreen (after Tk is ready)
+        self.after(0, self._show_fullscreen)
     
     def check_first_time_setup(self):
         """Check if credentials/API key are missing and show setup screen if needed"""
@@ -1042,10 +1042,7 @@ class EmailSummarizerApp(ctk.CTk):
                     pass
                 
                 # Refresh the login status to re-enable Load button if credentials are now valid
-                self.after(100, self.check_login_status)
-                
-                # Schedule fullscreen state to apply after all widgets are rendered
-                self.after(500, lambda: self.state("zoomed"))
+                self.check_login_status()
         except Exception as e:
             # Silently skip if there's an error
             pass
@@ -1393,18 +1390,19 @@ class EmailSummarizerApp(ctk.CTk):
             self.logout_btn.configure(state="disabled", fg_color="#CCCCCC", hover_color="#CCCCCC")
             self.change_creds_btn.configure(state="normal", fg_color="#6200EA", hover_color="#5E35B1")
     
+    def _show_fullscreen(self):
+        """Show window at fullscreen state"""
+        try:
+            self.state("zoomed")
+            self.deiconify()
+        except Exception:
+            self.deiconify()  # Show even if zoom fails
+    
     def get_service(self):
         creds = load_credentials()
         if creds:
             return build('gmail', 'v1', credentials=creds)
         return None
-    
-    def _apply_fullscreen(self):
-        """Apply fullscreen state after all initialization is done"""
-        try:
-            self.state("zoomed")
-        except Exception:
-            pass
     
     def open_change_credentials(self):
         """Open the setup screen to change credentials and API key"""
