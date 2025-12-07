@@ -1,4 +1,6 @@
 @echo off
-cd /d d:\Practice\email-summarizer
-python email_gui.py
+REM Email Summarizer Pro - GUI Launcher
+REM This script runs the main application
+
+python app.py
 pause

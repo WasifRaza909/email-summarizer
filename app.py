@@ -254,19 +254,19 @@ def gemini_summarize_and_reply(body):
             return "No email content to summarize."
         
         prompt = f"""You are an AI assistant.
-Please:
-1. Summarize the following email in concise bullet points using markdown formatting.
-2. Draft a professional reply email based on the summary.
+    Please:
+    1. Summarize the following email in concise bullet points using markdown formatting.
+    2. Draft a professional reply email based on the summary.
 
-Use markdown formatting:
-- Use **bold** for important points
-- Use * for bullet lists
-- Use ## for section headers (SUMMARY, DRAFT REPLY)
-- Format your response for readability
+    Formatting requirements:
+    - Use **bold** for important points and for section headings (e.g. **SUMMARY**, **DRAFT REPLY**).
+    - Use * for bullet lists.
+    - Use inline Markdown bold (`**...**`) for the section headers rather than markdown heading markers like `##`.
+    - Format your response for readability and clarity.
 
-Email:
-{body}
-"""
+    Email:
+    {body}
+    """
         
         # Include API key in the URL for Gemini API (read from config module)
         api_url = f"{GEMINI_ENDPOINT}?key={config.GEMINI_API_KEY}"
@@ -431,15 +431,20 @@ class SetupScreen(ctk.CTkToplevel):
         self.credentials_file_path = None
         self.result = {"api_key": "", "credentials_file": None}
         
-        # Handle close button (X) - prompt before closing
+        # Handle close button (X) - behavior depends on mode
         self.protocol("WM_DELETE_WINDOW", self.on_window_close)
         
         self.create_setup_ui()
     
     def on_window_close(self):
-        """Handle window close button (X) - exit the program immediately"""
-        self.master.quit()
-        self.master.destroy()
+        """Handle window close button (X) - exit app only on initial setup, otherwise just close dialog"""
+        if self.is_change_mode:
+            # User is changing credentials - just close the dialog, don't close the app
+            self.destroy()
+        else:
+            # Initial setup - user closes the setup screen, so exit the app
+            self.master.quit()
+            self.master.destroy()
     
     def create_setup_ui(self):
         """Create the setup UI"""
@@ -660,13 +665,23 @@ class SetupScreen(ctk.CTkToplevel):
             app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
             app_data_path.mkdir(parents=True, exist_ok=True)
             
+            # Remove old credential files (*.json files except the new one we're about to save)
+            source_filename = os.path.basename(self.credentials_file_path)
+            if app_data_path.exists():
+                for old_file in app_data_path.glob('*.json'):
+                    if old_file.is_file() and old_file.name != source_filename:
+                        try:
+                            old_file.unlink()  # Delete the old file
+                        except Exception:
+                            pass  # Silently skip if we can't delete
+            
             # Save API key to .env
             env_file = app_data_path / ".env"
             with open(env_file, 'w') as f:
                 f.write(f"GEMINI_API_KEY={api_key}\n")
             
-            # Copy credentials file
-            cred_dest = app_data_path / "credentials.json"
+            # Copy credentials file (preserve original filename)
+            cred_dest = app_data_path / source_filename
             with open(self.credentials_file_path, 'r') as src:
                 with open(cred_dest, 'w') as dst:
                     dst.write(src.read())
@@ -970,16 +985,33 @@ class EmailSummarizerApp(ctk.CTk):
         
         self.create_widgets()
         self.check_login_status()
+        
+        # Set to fullscreen at the very end, after everything is ready
+        self.after(200, self._apply_fullscreen)
     
     def check_first_time_setup(self):
         """Check if credentials/API key are missing and show setup screen if needed"""
         try:
             app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
-            credentials_path = app_data_path / "credentials.json"
             env_file_path = app_data_path / ".env"
             
-            # Check if credentials.json exists (prefer AppData, then project root)
-            cred_exists = credentials_path.exists() or os.path.exists(config.GMAIL_CREDENTIALS_FILE)
+            # Check if ANY valid OAuth credentials file exists in AppData
+            cred_exists = False
+            if app_data_path.exists():
+                for file in app_data_path.glob('*.json'):
+                    if file.is_file():
+                        try:
+                            with open(file, 'r') as f:
+                                data = json.load(f)
+                                if 'installed' in data or 'web' in data:
+                                    cred_exists = True
+                                    break
+                        except Exception:
+                            continue
+            
+            # Fallback: check config path and project root
+            if not cred_exists:
+                cred_exists = os.path.exists(config.GMAIL_CREDENTIALS_FILE) or os.path.exists('credentials.json')
             
             # Check if API key exists in environment (after loading .env)
             # Re-read from environment to get the most current value
@@ -1321,8 +1353,21 @@ class EmailSummarizerApp(ctk.CTk):
         self.progress_bar.set(0)
     
     def check_login_status(self):
-        # Get current API key from config (which may have been reloaded after setup)
-        current_api_key = config.GEMINI_API_KEY
+        # Get current API key from AppData .env (priority), then fall back to config
+        current_api_key = ""
+        try:
+            app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
+            env_file_path = app_data_path / ".env"
+            if env_file_path.exists():
+                from dotenv import dotenv_values
+                env_vars = dotenv_values(env_file_path)
+                current_api_key = env_vars.get('GEMINI_API_KEY', '').strip()
+        except Exception:
+            pass
+        
+        # Fallback to config if not found in AppData
+        if not current_api_key:
+            current_api_key = config.GEMINI_API_KEY.strip() if config.GEMINI_API_KEY else ""
         
         if is_logged_in():
             self.status_label.configure(text="✓ Logged in - Ready to load emails")
@@ -1331,7 +1376,7 @@ class EmailSummarizerApp(ctk.CTk):
             self.login_btn.configure(state="disabled", fg_color="#CCCCCC", hover_color="#CCCCCC")
             
             # Only enable load button if API key is also available
-            if current_api_key and current_api_key.strip():
+            if current_api_key:
                 self.load_btn.configure(state="normal", fg_color=COLOR_PRIMARY, hover_color=COLOR_PRIMARY_DARK)
             else:
                 self.load_btn.configure(state="disabled", fg_color="#CCCCCC", hover_color="#CCCCCC")
@@ -1353,6 +1398,13 @@ class EmailSummarizerApp(ctk.CTk):
         if creds:
             return build('gmail', 'v1', credentials=creds)
         return None
+    
+    def _apply_fullscreen(self):
+        """Apply fullscreen state after all initialization is done"""
+        try:
+            self.state("zoomed")
+        except Exception:
+            pass
     
     def open_change_credentials(self):
         """Open the setup screen to change credentials and API key"""
@@ -1421,16 +1473,29 @@ class EmailSummarizerApp(ctk.CTk):
         """Background thread for OAuth login flow"""
         success = False
         try:
-            # Resolve credentials path: prefer AppData, then config, then local
+            # Resolve credentials path: prefer AppData (any valid OAuth JSON), then config, then local
             app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
-            appdata_cred = app_data_path / "credentials.json"
             cred_path = None
             
-            if appdata_cred.exists():
-                cred_path = str(appdata_cred)
-            elif os.path.exists(config.GMAIL_CREDENTIALS_FILE):
+            # Try to find any valid OAuth credentials file in AppData
+            if app_data_path.exists():
+                for file in app_data_path.glob('*.json'):
+                    if file.is_file():
+                        try:
+                            with open(file, 'r') as f:
+                                data = json.load(f)
+                                if 'installed' in data or 'web' in data:
+                                    cred_path = str(file)
+                                    break
+                        except Exception:
+                            continue
+            
+            # Fallback: check config path
+            if not cred_path and os.path.exists(config.GMAIL_CREDENTIALS_FILE):
                 cred_path = config.GMAIL_CREDENTIALS_FILE
-            elif os.path.exists('credentials.json'):
+            
+            # Fallback: check current directory
+            if not cred_path and os.path.exists('credentials.json'):
                 cred_path = 'credentials.json'
             
             if not cred_path:
