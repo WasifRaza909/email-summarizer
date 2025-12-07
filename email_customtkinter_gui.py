@@ -37,18 +37,28 @@ class MarkdownTextWidget(ctk.CTkTextbox):
         # Get access to the underlying tkinter textbox
         self._text_widget = self._textbox
         
-        # Use standard fonts for styling
-        base_font = ("Segoe UI", 11)
-        bold_font = ("Segoe UI", 11, "bold")
-        italic_font = ("Segoe UI", 11, "italic")
-        bold_italic_font = ("Segoe UI", 11, "bold", "italic")
-        code_font = ("Courier New", 10)
-        heading_font = ("Segoe UI", 12, "bold")
+        # Use standard fonts for styling with increased font sizes
+        base_font = ("Segoe UI", 12)
+        bold_font = ("Segoe UI", 12, "bold")
+        italic_font = ("Segoe UI", 12, "italic")
+        bold_italic_font = ("Segoe UI", 12, "bold", "italic")
+        code_font = ("Courier New", 11)
+        heading_font = ("Segoe UI", 14, "bold")
         
         # Configure tags for markdown rendering with ACTUAL STYLES
-        self._text_widget.tag_config("bold", font=bold_font)
+        # Base text with larger font
+        self._text_widget.tag_config("base", font=base_font)
+        
+        # Bold with color highlight (yellow/gold background)
+        self._text_widget.tag_config("bold", 
+                                     font=bold_font,
+                                     foreground="#FFD700",
+                                    )
         self._text_widget.tag_config("italic", font=italic_font)
-        self._text_widget.tag_config("bold_italic", font=bold_italic_font)
+        self._text_widget.tag_config("bold_italic", 
+                                     font=bold_italic_font,
+                                     foreground="#FFD700",
+                                    )
         
         # Code - monospace font with background
         self._text_widget.tag_config("code", 
@@ -56,7 +66,7 @@ class MarkdownTextWidget(ctk.CTkTextbox):
                                      foreground="#C2185B",
                                      background="#F5F5F5")
         
-        # Headings - bold + blue color
+        # Headings - bold + blue color with increased size
         self._text_widget.tag_config("heading1", 
                                      font=heading_font,
                                      foreground="#1A73E8")
@@ -109,9 +119,9 @@ class MarkdownTextWidget(ctk.CTkTextbox):
         
         last_end = 0
         for match in re.finditer(pattern, text):
-            # Insert text before match
+            # Insert text before match with base font
             if match.start() > last_end:
-                self._text_widget.insert(index, text[last_end:match.start()])
+                self._text_widget.insert(index, text[last_end:match.start()], 'base')
             
             if match.group(2):  # ***bold italic***
                 self._text_widget.insert(index, match.group(2), 'bold_italic')
@@ -124,23 +134,23 @@ class MarkdownTextWidget(ctk.CTkTextbox):
             
             last_end = match.end()
         
-        # Insert remaining text
+        # Insert remaining text with base font
         if last_end < len(text):
-            self._text_widget.insert(index, text[last_end:])
+            self._text_widget.insert(index, text[last_end:], 'base')
 
-# Colors - Modern Professional Palette
-COLOR_PRIMARY = "#1A73E8"
-COLOR_PRIMARY_DARK = "#1565C0"
-COLOR_PRIMARY_LIGHT = "#E8F0FE"  # Light variant for selected state
-COLOR_ACCENT = "#34A853"
-COLOR_WARNING = "#FBBC04"
-COLOR_ERROR = "#EA4335"
-COLOR_BG = "#FFFFFF"
-COLOR_SURFACE = "#F8F9FA"
-COLOR_SURFACE_DARK = "#E8EAED"
-COLOR_TEXT = "#202124"
-COLOR_TEXT_SECONDARY = "#5F6368"
-COLOR_BORDER = "#DADCE0"
+# Colors - Modern Professional Palette (Dark Theme Only)
+COLOR_PRIMARY = "#8AB4F8"
+COLOR_PRIMARY_DARK = "#5A96E8"
+COLOR_PRIMARY_LIGHT = "#3D5A80"
+COLOR_ACCENT = "#81C995"
+COLOR_WARNING = "#FBC02D"
+COLOR_ERROR = "#F28482"
+COLOR_BG = "#121212"
+COLOR_SURFACE = "#1E1E1E"
+COLOR_SURFACE_DARK = "#2A2A2A"
+COLOR_TEXT = "#E8EAED"
+COLOR_TEXT_SECONDARY = "#9AA0A6"
+COLOR_BORDER = "#3F3F3F"
 
 # ========== FONT SIZES ==========
 FONT_XS = 10      # Extra small - secondary text
@@ -398,11 +408,25 @@ class SetupScreen(ctk.CTkToplevel):
         self.transient(parent)
         self.grab_set()
         
-        # Center on parent
+        # Center on screen
+        parent.update_idletasks()
         self.update_idletasks()
-        x = parent.winfo_x() + (parent.winfo_width() // 2) - 300
-        y = parent.winfo_y() + (parent.winfo_height() // 2) - 350
-        self.geometry(f"+{x}+{y}")
+        
+        # Get screen dimensions
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        
+        # Calculate center position on screen (window is 600x700)
+        window_w = 600
+        window_h = 700
+        x = (screen_w - window_w) // 2
+        y = (screen_h - window_h) // 2
+        
+        # Ensure no negative coordinates
+        x = max(0, x)
+        y = max(0, y)
+        
+        self.geometry(f"+{int(x)}+{int(y)}")
         
         self.credentials_file_path = None
         self.result = {"api_key": "", "credentials_file": None}
@@ -413,14 +437,9 @@ class SetupScreen(ctk.CTkToplevel):
         self.create_setup_ui()
     
     def on_window_close(self):
-        """Handle window close button (X) - ask user before closing"""
-        response = messagebox.askyesno(
-            "Close Setup",
-            "Close without saving credentials?\n\n"
-            "Use 'Skip Setup' or 'Change Credentials' button to close properly."
-        )
-        if response:
-            self.destroy()
+        """Handle window close button (X) - exit the program immediately"""
+        self.master.quit()
+        self.master.destroy()
     
     def create_setup_ui(self):
         """Create the setup UI"""
@@ -460,7 +479,7 @@ class SetupScreen(ctk.CTkToplevel):
         
         api_title = ctk.CTkLabel(
             api_section,
-            text="1️⃣  Enter Your Gemini/OpenAI API Key",
+            text="Enter your Gemini/OpenAI API Key",
             font=("Segoe UI", 13, "bold"),
             text_color=COLOR_PRIMARY
         )
@@ -492,7 +511,7 @@ class SetupScreen(ctk.CTkToplevel):
         
         cred_title = ctk.CTkLabel(
             cred_section,
-            text="2️⃣  Upload Your Google credentials.json",
+            text="Upload your Google credentials.json",
             font=("Segoe UI", 13, "bold"),
             text_color=COLOR_PRIMARY
         )
@@ -536,7 +555,7 @@ class SetupScreen(ctk.CTkToplevel):
         
         security_title = ctk.CTkLabel(
             security_section,
-            text="🔒 Your Privacy is Protected",
+            text="🔒 Your privacy is protected",
             font=("Segoe UI", 12, "bold"),
             text_color="#4CAF50"
         )
@@ -544,7 +563,7 @@ class SetupScreen(ctk.CTkToplevel):
         
         security_text = ctk.CTkLabel(
             security_section,
-            text="✓ We do NOT store any credentials on servers\n✓ All data remains on your computer only\n✓ Direct connection to Gmail & Google APIs",
+            text="✓ We do NOT store any credentials on servers.\n✓ All data remains on your computer only.\n✓ Direct connection to Gmail & Google APIs.",
             font=("Segoe UI", 10),
             text_color="#C8E6C9",
             justify="left"
@@ -567,17 +586,7 @@ class SetupScreen(ctk.CTkToplevel):
         )
         self.save_btn.pack(fill="x", pady=(0, 10))
         
-        self.skip_btn = ctk.CTkButton(
-            button_frame,
-            text="⊘ Skip Setup",
-            command=self.skip_setup,
-            fg_color="#424242",
-            hover_color="#616161",
-            text_color="#FFFFFF",
-            height=35,
-            font=("Segoe UI", 11)
-        )
-        self.skip_btn.pack(fill="x")
+        # Skip button removed to require completing setup before using the app
     
     def select_credentials_file(self):
         """Open file dialog to select credentials.json"""
@@ -621,7 +630,7 @@ class SetupScreen(ctk.CTkToplevel):
                 "❌ Please select your credentials.json file\n\n"
                 "If you don't have it yet, you can:\n"
                 "1. Get it from Google Cloud Console\n"
-                "2. Set it up later using 'Change Credentials'"
+                "2. Skip Setup & Set it up later using 'Change Credentials'"
             )
             return
         
@@ -936,7 +945,7 @@ class LoginMonitorWindow(ctk.CTkToplevel):
             pass
 
 # ========== MAIN APP ==========
-ctk.set_appearance_mode("light")
+ctk.set_appearance_mode("dark")
 
 class EmailSummarizerApp(ctk.CTk):
     def __init__(self):
@@ -954,6 +963,7 @@ class EmailSummarizerApp(ctk.CTk):
         self.email_items = []
         self.max_emails = 5
         self.summarize_on_load = tk.BooleanVar(value=False)  # Toggle: lazy vs eager
+        self.current_theme = "dark"  # Track current theme
         
         # Check if first-time setup is needed
         self.check_first_time_setup()
@@ -965,52 +975,59 @@ class EmailSummarizerApp(ctk.CTk):
         """Check if credentials/API key are missing and show setup screen if needed"""
         try:
             app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
-            setup_marker = app_data_path / ".setup_complete"
             credentials_path = app_data_path / "credentials.json"
             env_file_path = app_data_path / ".env"
             
-            # Check if credentials.json exists (in project or AppData)
-            cred_exists = os.path.exists(config.GMAIL_CREDENTIALS_FILE) or credentials_path.exists()
+            # Check if credentials.json exists (prefer AppData, then project root)
+            cred_exists = credentials_path.exists() or os.path.exists(config.GMAIL_CREDENTIALS_FILE)
             
-            # Check if API key exists and is valid
-            api_key_exists = bool(config.GEMINI_API_KEY and config.GEMINI_API_KEY.strip())
+            # Check if API key exists in environment (after loading .env)
+            # Re-read from environment to get the most current value
+            from dotenv import dotenv_values
+            env_vars = dotenv_values(env_file_path) if env_file_path.exists() else {}
+            api_key_from_env = env_vars.get('GEMINI_API_KEY', '').strip()
             
-            # Show setup if credentials or API key missing (always check, not just first time)
+            # Use API key from env or from config
+            api_key_exists = bool(api_key_from_env or (config.GEMINI_API_KEY and config.GEMINI_API_KEY.strip()))
+            
+            # Show setup only if credentials OR API key is missing
             if not cred_exists or not api_key_exists:
                 setup_screen = SetupScreen(self)
                 self.wait_window(setup_screen)
                 
-                # After setup, reload .env and config to pick up new values
-                from dotenv import load_dotenv
-                load_dotenv(env_file_path, override=True)
-                
-                # Reload config module to get updated values
-                import importlib
-                importlib.reload(config)
+                # After setup closes, reload .env and config to pick up new values
+                try:
+                    from dotenv import load_dotenv
+                    load_dotenv(env_file_path, override=True)
+                    
+                    # Reload config module to get updated values
+                    import importlib
+                    importlib.reload(config)
+                    
+                    # Update the global GEMINI_API_KEY from reloaded config
+                    globals()['GEMINI_API_KEY'] = config.GEMINI_API_KEY
+                except Exception:
+                    pass
                 
                 # Refresh the login status to re-enable Load button if credentials are now valid
                 self.after(100, self.check_login_status)
                 
-                # Mark setup as complete
-                try:
-                    app_data_path.mkdir(parents=True, exist_ok=True)
-                    setup_marker.touch()
-                except:
-                    pass
+                # Schedule fullscreen state to apply after all widgets are rendered
+                self.after(500, lambda: self.state("zoomed"))
         except Exception as e:
             # Silently skip if there's an error
             pass
     
     def create_widgets(self):
         # ===== HEADER =====
-        header = ctk.CTkFrame(self, fg_color=COLOR_PRIMARY, height=85, corner_radius=0)
+        header = ctk.CTkFrame(self, fg_color=COLOR_SURFACE_DARK, height=85, corner_radius=0)
         header.pack(fill="x", padx=0, pady=0)
         header.pack_propagate(False)
         
-        header_content = ctk.CTkFrame(header, fg_color=COLOR_PRIMARY)
+        header_content = ctk.CTkFrame(header, fg_color=COLOR_SURFACE_DARK)
         header_content.pack(fill="both", expand=True, padx=30, pady=15)
         
-        left_header = ctk.CTkFrame(header_content, fg_color=COLOR_PRIMARY)
+        left_header = ctk.CTkFrame(header_content, fg_color=COLOR_SURFACE_DARK)
         left_header.pack(side="left", fill="both", expand=True)
         
         title = ctk.CTkLabel(
@@ -1029,16 +1046,9 @@ class EmailSummarizerApp(ctk.CTk):
         )
         self.status_label.pack(anchor="w", pady=(2, 0))
         
-        right_header = ctk.CTkFrame(header_content, fg_color=COLOR_PRIMARY)
-        right_header.pack(side="right", fill="y")
-        
-        self.status_icon = ctk.CTkLabel(
-            right_header,
-            text="🔴",
-            font=("Segoe UI", FONT_ICON),
-            text_color="#FFFFFF"
-        )
-        self.status_icon.pack(pady=(3, 0))
+        # Right header intentionally omitted so no icon or box appears on the right
+        # Keep a safe attribute so code that updates the icon won't raise AttributeError.
+        self.status_icon = None
         
         # ===== TOOLBAR =====
         toolbar = ctk.CTkFrame(self, fg_color=COLOR_SURFACE, height=65)
@@ -1178,6 +1188,10 @@ class EmailSummarizerApp(ctk.CTk):
         )
         self.change_creds_btn.pack(side="left", padx=4)
         
+        # Right side - Theme toggle button
+        right_buttons = ctk.CTkFrame(toolbar_content, fg_color=COLOR_SURFACE)
+        right_buttons.pack(side="right", fill="y")
+        
         # ===== MAIN CONTENT =====
         content = ctk.CTkFrame(self, fg_color=COLOR_BG)
         content.pack(fill="both", expand=True, padx=15, pady=15)
@@ -1230,20 +1244,20 @@ class EmailSummarizerApp(ctk.CTk):
         subj_title = ctk.CTkLabel(
             info_frame,
             text="Subject:",
-            font=("Segoe UI", FONT_XS, "bold"),
+            font=("Segoe UI", FONT_LG, "bold"),
             text_color=COLOR_TEXT_SECONDARY
         )
-        subj_title.pack(anchor="w", pady=(0, 2))
+        subj_title.pack(anchor="w", pady=(0, 2), padx=10)
         
         self.subject_label = ctk.CTkLabel(
             info_frame,
             text="No email selected",
-            font=("Segoe UI", FONT_MD),
-            text_color=COLOR_TEXT,
+            font=("Segoe UI", FONT_LG),
+            text_color=COLOR_PRIMARY,
             wraplength=500,
             justify="left"
         )
-        self.subject_label.pack(anchor="w", pady=(0, 10))
+        self.subject_label.pack(anchor="w", pady=(0, 2), padx=10)
         
         from_title = ctk.CTkLabel(
             info_frame,
@@ -1251,7 +1265,7 @@ class EmailSummarizerApp(ctk.CTk):
             font=("Segoe UI", FONT_LG, "bold"),
             text_color=COLOR_TEXT_SECONDARY
         )
-        from_title.pack(anchor="w", pady=(0, 2))
+        from_title.pack(anchor="w", pady=(0, 2), padx=10)
         
         self.from_label = ctk.CTkLabel(
             info_frame,
@@ -1261,7 +1275,7 @@ class EmailSummarizerApp(ctk.CTk):
             wraplength=500,
             justify="left"
         )
-        self.from_label.pack(anchor="w")
+        self.from_label.pack(anchor="w", padx=10)
         
         divider = ctk.CTkFrame(right_panel, fg_color=COLOR_BORDER, height=1)
         divider.pack(fill="x", padx=16, pady=10)
@@ -1269,7 +1283,7 @@ class EmailSummarizerApp(ctk.CTk):
         # Summary text - now with markdown support
         self.summary_text = MarkdownTextWidget(
             right_panel,
-            font=("Segoe UI", FONT_MD),
+            font=("Segoe UI", 13),
             fg_color=COLOR_BG,
             text_color=COLOR_TEXT,
             border_color=COLOR_BORDER,
@@ -1312,7 +1326,8 @@ class EmailSummarizerApp(ctk.CTk):
         
         if is_logged_in():
             self.status_label.configure(text="✓ Logged in - Ready to load emails")
-            self.status_icon.configure(text="🟢")
+            if getattr(self, 'status_icon', None):
+                self.status_icon.configure(text="🟢")
             self.login_btn.configure(state="disabled", fg_color="#CCCCCC", hover_color="#CCCCCC")
             
             # Only enable load button if API key is also available
@@ -1326,7 +1341,8 @@ class EmailSummarizerApp(ctk.CTk):
             self.service = self.get_service()
         else:
             self.status_label.configure(text="✗ Not logged in")
-            self.status_icon.configure(text="🔴")
+            if getattr(self, 'status_icon', None):
+                self.status_icon.configure(text="🔴")
             self.login_btn.configure(state="normal", fg_color=COLOR_ACCENT, hover_color="#2D8E47")
             self.load_btn.configure(state="disabled", fg_color="#CCCCCC", hover_color="#CCCCCC")
             self.logout_btn.configure(state="disabled", fg_color="#CCCCCC", hover_color="#CCCCCC")
@@ -1675,7 +1691,8 @@ class EmailSummarizerApp(ctk.CTk):
                 except Exception:
                     pass
                 self.status_label.configure(text="✗ Not logged in")
-                self.status_icon.configure(text="🔴")
+                if getattr(self, 'status_icon', None):
+                    self.status_icon.configure(text="🔴")
         except Exception:
             # Fallback: reset UI
             try:
@@ -1684,7 +1701,8 @@ class EmailSummarizerApp(ctk.CTk):
                 pass
             try:
                 self.status_label.configure(text="✗ Not logged in")
-                self.status_icon.configure(text="🔴")
+                if getattr(self, 'status_icon', None):
+                    self.status_icon.configure(text="🔴")
             except Exception:
                 pass
     
@@ -1700,6 +1718,41 @@ class EmailSummarizerApp(ctk.CTk):
             self.clear_emails()
             if not skip_confirm:
                 messagebox.showinfo("Success", "✓ Logged out")
+    
+    def toggle_theme(self):
+        """Toggle between dark and light theme"""
+        try:
+            # Update all widgets with new colors
+            self.update_widget_colors()
+            self.update_idletasks()
+        except Exception as e:
+            messagebox.showerror("Error", f"Theme toggle failed: {e}")
+    
+    def update_widget_colors(self):
+        """Update all widgets with current theme colors"""
+        try:
+            # Update main backgrounds
+            self.configure(fg_color=CURRENT_COLORS["bg"])
+            
+            # Update all frames recursively
+            def update_frames(widget):
+                if hasattr(widget, 'configure'):
+                    try:
+                        if 'fg_color' in widget.configure():
+                            widget.configure(fg_color=CURRENT_COLORS["surface"])
+                    except:
+                        pass
+                    try:
+                        if 'text_color' in widget.configure():
+                            widget.configure(text_color=CURRENT_COLORS["text"])
+                    except:
+                        pass
+                for child in widget.winfo_children():
+                    update_frames(child)
+            
+            update_frames(self)
+        except Exception as e:
+            pass  # Silently fail if update doesn't work
     
     def clear_emails(self):
         for widget in self.email_list_frame.winfo_children():
