@@ -8,7 +8,7 @@ import sys
 from dotenv import load_dotenv
 
 # Fix Unicode encoding for Windows
-if sys.platform == 'win32':
+if sys.platform == 'win32' and sys.stdout is not None:
     import io
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
