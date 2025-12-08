@@ -430,21 +430,23 @@ class SetupScreen(ctk.CTkToplevel):
         
         self.credentials_file_path = None
         self.result = {"api_key": "", "credentials_file": None}
+        self.user_cancelled = False  # Track if user closed without saving
         
         # Handle close button (X) - behavior depends on mode
         self.protocol("WM_DELETE_WINDOW", self.on_window_close)
         
         self.create_setup_ui()
+        
+        # Ensure the window is visible and on top
+        self.lift()
+        self.focus()
     
     def on_window_close(self):
-        """Handle window close button (X) - exit app only on initial setup, otherwise just close dialog"""
-        if self.is_change_mode:
-            # User is changing credentials - just close the dialog, don't close the app
-            self.destroy()
-        else:
-            # Initial setup - user closes the setup screen, so exit the app
-            self.master.quit()
-            self.master.destroy()
+        """Handle window close button (X) - just close the dialog"""
+        # Mark as cancelled so we don't keep showing the dialog
+        self.user_cancelled = True
+        # Simply close the dialog - let the parent app decide what to do
+        self.destroy()
     
     def create_setup_ui(self):
         """Create the setup UI"""
@@ -965,7 +967,6 @@ ctk.set_appearance_mode("dark")
 class EmailSummarizerApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.withdraw()  # Hide window while setting up
         self.title("Email Summarizer Pro")
         self.minsize(1100, 650)
         self.resizable(True, True)
@@ -980,72 +981,20 @@ class EmailSummarizerApp(ctk.CTk):
         self.summarize_on_load = tk.BooleanVar(value=False)  # Toggle: lazy vs eager
         self.current_theme = "dark"  # Track current theme
         
-        # Check if first-time setup is needed
-        self.check_first_time_setup()
+        # Withdraw window during setup to avoid showing background window
+        self.withdraw()
+        self.update_idletasks()  # Force window creation without showing it
         
+        # Check for first-time setup BEFORE creating any widgets
+        # This will block until setup is complete if needed
+        self._do_first_time_setup()
+        
+        # Now create widgets only after setup is done
         self.create_widgets()
         self.check_login_status()
         
-        # Schedule window to show at fullscreen (after Tk is ready)
+        # Show the window at full size
         self.after(0, self._show_fullscreen)
-    
-    def check_first_time_setup(self):
-        """Check if credentials/API key are missing and show setup screen if needed"""
-        try:
-            app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
-            env_file_path = app_data_path / ".env"
-            
-            # Check if ANY valid OAuth credentials file exists in AppData
-            cred_exists = False
-            if app_data_path.exists():
-                for file in app_data_path.glob('*.json'):
-                    if file.is_file():
-                        try:
-                            with open(file, 'r') as f:
-                                data = json.load(f)
-                                if 'installed' in data or 'web' in data:
-                                    cred_exists = True
-                                    break
-                        except Exception:
-                            continue
-            
-            # Fallback: check config path and project root
-            if not cred_exists:
-                cred_exists = os.path.exists(config.GMAIL_CREDENTIALS_FILE) or os.path.exists('credentials.json')
-            
-            # Check if API key exists in environment (after loading .env)
-            # Re-read from environment to get the most current value
-            from dotenv import dotenv_values
-            env_vars = dotenv_values(env_file_path) if env_file_path.exists() else {}
-            api_key_from_env = env_vars.get('GEMINI_API_KEY', '').strip()
-            
-            # Use API key from env or from config
-            api_key_exists = bool(api_key_from_env or (config.GEMINI_API_KEY and config.GEMINI_API_KEY.strip()))
-            
-            # Show setup only if credentials OR API key is missing
-            if not cred_exists or not api_key_exists:
-                setup_screen = SetupScreen(self)
-                self.wait_window(setup_screen)
-                
-                # After setup closes, reload .env and config to pick up new values
-                try:
-                    from dotenv import load_dotenv
-                    load_dotenv(env_file_path, override=True)
-                    
-                    # Reload config module to get updated values
-                    import importlib
-                    importlib.reload(config)
-                    
-                    # Update the global GEMINI_API_KEY from reloaded config
-                    globals()['GEMINI_API_KEY'] = config.GEMINI_API_KEY
-                except Exception:
-                    pass
-                
-                # Refresh the login status to re-enable Load button if credentials are now valid
-                self.check_login_status()
-        except Exception as e:
-            # Silently skip if there's an error
-            pass
     
     def create_widgets(self):
         # ===== HEADER =====
@@ -1396,7 +1345,119 @@ class EmailSummarizerApp(ctk.CTk):
             self.state("zoomed")
             self.deiconify()
         except Exception:
-            self.deiconify()  # Show even if zoom fails
+            self.deiconify()
+    
+    def _do_first_time_setup(self):
+        """Check for first-time setup before creating any widgets"""
+        try:
+            # Keep checking until setup is complete or credentials are available
+            max_attempts = 3
+            attempt = 0
+            user_cancelled = False
+            
+            while attempt < max_attempts:
+                attempt += 1
+                
+                # Check for credentials in order of priority:
+                # 1. Local credentials.json (most common for BAT file launch)
+                # 2. AppData credentials
+                # 3. Config path
+                
+                cred_exists = False
+                
+                # Priority 1: Check local credentials.json in current directory
+                if os.path.exists('credentials.json'):
+                    try:
+                        with open('credentials.json', 'r') as f:
+                            data = json.load(f)
+                            if ('installed' in data or 'web' in data) and 'client_id' in data.get('installed', data.get('web', {})):
+                                cred_exists = True
+                    except Exception:
+                        pass
+                
+                # Priority 2: Check AppData location
+                if not cred_exists:
+                    app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
+                    if app_data_path.exists():
+                        for file in app_data_path.glob('*.json'):
+                            if file.is_file():
+                                try:
+                                    with open(file, 'r') as f:
+                                        data = json.load(f)
+                                        if 'installed' in data or 'web' in data:
+                                            cred_exists = True
+                                            break
+                                except Exception:
+                                    continue
+                
+                # Priority 3: Check config path
+                if not cred_exists:
+                    import config as config_module
+                    cred_exists = os.path.exists(config_module.GMAIL_CREDENTIALS_FILE)
+                
+                # Check if API key exists
+                from dotenv import dotenv_values
+                app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
+                env_file_path = app_data_path / ".env"
+                
+                env_vars = dotenv_values(env_file_path) if env_file_path.exists() else {}
+                api_key_from_env = env_vars.get('GEMINI_API_KEY', '').strip()
+                
+                # Use API key from env or from config
+                import config as config_module
+                api_key_exists = bool(api_key_from_env or (config_module.GEMINI_API_KEY and config_module.GEMINI_API_KEY.strip()))
+                
+                # Check if setup is needed
+                needs_setup = not cred_exists or not api_key_exists
+                
+                if not needs_setup:
+                    # Setup is complete, exit the loop
+                    break
+                
+                # Show setup screen - this blocks until the window closes
+                setup_screen = SetupScreen(self)
+                self.wait_window(setup_screen)
+                
+                # Check if user cancelled (closed without saving)
+                if hasattr(setup_screen, 'user_cancelled') and setup_screen.user_cancelled:
+                    # User closed the dialog without saving
+                    user_cancelled = True
+                    break
+                
+                # After setup closes, reload .env and config to pick up new values
+                try:
+                    import importlib
+                    import sys
+                    from dotenv import load_dotenv
+                    
+                    # Reload dotenv to pick up new .env file
+                    load_dotenv(env_file_path, override=True)
+                    
+                    # Reload config module to get updated values
+                    if 'config' in sys.modules:
+                        importlib.reload(sys.modules['config'])
+                    
+                    # Update the global GEMINI_API_KEY from reloaded config
+                    import config as config_module
+                    globals()['GEMINI_API_KEY'] = config_module.GEMINI_API_KEY
+                except Exception as e:
+                    pass
+            
+            # If user cancelled and we still don't have credentials, exit the program
+            if user_cancelled:
+                # Check one more time if credentials are available
+                cred_exists = os.path.exists('credentials.json') or os.path.exists(config_module.GMAIL_CREDENTIALS_FILE)
+                import config as config_module
+                api_key_exists = bool(config_module.GEMINI_API_KEY and config_module.GEMINI_API_KEY.strip())
+                
+                if not cred_exists or not api_key_exists:
+                    # No credentials and user cancelled - quit the program
+                    self.destroy()
+                    import sys
+                    sys.exit(0)
+        except Exception as e:
+            # Silently fail - setup may have been cancelled
+            pass
     
     def get_service(self):
         creds = load_credentials()
