@@ -24,14 +24,3 @@ GMAIL_TOKEN_CACHE = 'token.pkl'
 # Note: API key is loaded from .env file (set via app's setup screen)
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
-GEMINI_TEMPERATURE = 0.2
-GEMINI_MAX_TOKENS = 2048
-
-# ========== UI SETTINGS ==========
-DEFAULT_EMAIL_COUNT = 5
-DEFAULT_SUMMARIZE_ON_LOAD = False
-PARALLEL_WORKERS = 4
-WINDOW_WIDTH = 1400
-WINDOW_HEIGHT = 850
-MIN_WINDOW_WIDTH = 1100
-MIN_WINDOW_HEIGHT = 650
