@@ -406,9 +406,9 @@ class SetupScreen(ctk.CTkToplevel):
         self.is_change_mode = is_change_mode
         
         if is_change_mode:
-            self.title("Email Summarizer Pro - Change Credentials")
+            self.title("AI Email Summarizer Pro - Change Credentials")
         else:
-            self.title("Email Summarizer Pro - Initial Setup")
+            self.title("AI Email Summarizer Pro - Initial Setup")
         
         self.geometry("600x700")
         self.resizable(False, False)
@@ -475,7 +475,7 @@ class SetupScreen(ctk.CTkToplevel):
             title_text = "🔄 Update Your Credentials"
             subtitle_text = "Change your API key or Gmail credentials"
         else:
-            title_text = "🚀 Welcome to Email Summarizer Pro"
+            title_text = "🚀 Welcome to AI Email Summarizer Pro"
             subtitle_text = "Let's get you set up in 2 minutes"
         
         # Title
@@ -897,7 +897,7 @@ class LoginMonitorWindow(ctk.CTkToplevel):
     
     def __init__(self, parent, flow_callback):
         super().__init__(parent)
-        self.title("Email Summarizer Pro - Signing In")
+        self.title("AI Email Summarizer Pro - Signing In")
         self.geometry("450x250")
         self.resizable(False, False)
         self.configure(fg_color=COLOR_BG)
@@ -1055,7 +1055,7 @@ ctk.set_appearance_mode("dark")
 class EmailSummarizerApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Email Summarizer Pro")
+        self.title("AI Email Summarizer Pro")
         self.minsize(1100, 650)
         self.resizable(True, True)
         self.configure(fg_color=COLOR_BG)
@@ -1127,7 +1127,7 @@ class EmailSummarizerApp(ctk.CTk):
         
         title = ctk.CTkLabel(
             left_header,
-            text="Email Summarizer Pro",
+            text="AI Email Summarizer Pro",
             font=("Segoe UI", FONT_TITLE, "bold"),
             text_color="#FFFFFF"
         )
@@ -1779,7 +1779,7 @@ class EmailSummarizerApp(ctk.CTk):
                     self_inner.end_headers()
                     response_html = """
                     <html>
-                    <head><title>Email Summarizer Pro - Login Complete</title></head>
+                    <head><title>AI Email Summarizer Pro - Login Complete</title></head>
                     <body style="font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
                         <div style="text-align: center; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
                             <h2 style="color: #333; margin-top: 0;">\u2713 Login Successful!</h2>

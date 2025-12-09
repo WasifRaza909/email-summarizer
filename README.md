@@ -1,4 +1,4 @@
-# Email Summarizer Pro
+# AI Email Summarizer Pro
 ### AI-Powered Gmail Email Summary & Reply Generator
 
 A lightweight, professional desktop application that connects to your Gmail inbox and uses Google's advanced Gemini AI to automatically generate intelligent email summaries and draft professional replies.
@@ -118,7 +118,7 @@ docker run -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix email-summarizer
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Click the **Project Selector** (top-left dropdown)
 3. Click **"NEW PROJECT"**
-4. Enter a project name: `Email Summarizer` (or any name)
+4. Enter a project name: `AI Email Summarizer` (or any name)
 5. Click **"CREATE"**
 6. Wait for the project to be created (this may take a few moments)
 
@@ -145,7 +145,7 @@ docker run -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix email-summarizer
    - Select **"External"** (for personal use)
    - Click **"CREATE"**
    - Fill in the details:
-     - **App name**: `Email Summarizer`
+   - **App name**: `AI Email Summarizer`
      - **User support email**: (your email)
      - **Developer contact**: (your email)
    - Click **"SAVE AND CONTINUE"**

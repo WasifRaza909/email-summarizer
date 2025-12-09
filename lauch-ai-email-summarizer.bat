@@ -1,5 +1,5 @@
 @echo off
-REM Email Summarizer Pro - GUI Launcher
+REM AI Email Summarizer Pro - GUI Launcher
 REM This script runs the main application silently
 
 REM Check if Python is installed
