@@ -702,69 +702,13 @@ class SetupScreen(ctk.CTkToplevel):
         
         # Validate API key by testing it
         self.api_entry.configure(state="disabled")
-        messagebox.showinfo("Testing API Key", "Testing your API key... Please wait.")
+        self.save_btn.configure(state="disabled")
         
-        if not self.test_gemini_api_key(api_key):
-            self.api_entry.configure(state="normal")
-            messagebox.showerror(
-                "❌ Invalid API Key",
-                "The API key you provided is invalid or not working.\n\n"
-                "Please check:\n"
-                "1. The key is correct and not expired\n"
-                "2. The key is enabled on Google Cloud Console\n"
-                "3. Gemini API is enabled for your project\n\n"
-                "Get a key from: https://aistudio.google.com/app/apikey"
-            )
-            self.api_entry.focus()
-            return
+        # Show custom auto-closing testing dialog
+        self._show_testing_dialog()
         
-        self.api_entry.configure(state="normal")
-        
-        # Everything is valid - save settings
-        try:
-            # Create AppData folder if it doesn't exist
-            app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
-            app_data_path.mkdir(parents=True, exist_ok=True)
-            
-            # Remove old credential files (*.json files except the new one we're about to save)
-            source_filename = os.path.basename(self.credentials_file_path)
-            if app_data_path.exists():
-                for old_file in app_data_path.glob('*.json'):
-                    if old_file.is_file() and old_file.name != source_filename:
-                        try:
-                            old_file.unlink()  # Delete the old file
-                        except Exception:
-                            pass  # Silently skip if we can't delete
-            
-            # Save API key to .env
-            env_file = app_data_path / ".env"
-            with open(env_file, 'w') as f:
-                f.write(f"GEMINI_API_KEY={api_key}\n")
-            
-            # Copy credentials file (preserve original filename)
-            cred_dest = app_data_path / source_filename
-            with open(self.credentials_file_path, 'r') as src:
-                with open(cred_dest, 'w') as dst:
-                    dst.write(src.read())
-            
-            # Create a marker file to indicate setup is complete
-            setup_marker = app_data_path / ".setup_complete"
-            setup_marker.touch()
-            
-            # Update global config with new paths
-            import config as config_module
-            config_module.GMAIL_CREDENTIALS_FILE = str(cred_dest)
-            config_module.GEMINI_API_KEY = api_key
-            
-            messagebox.showinfo(
-                "✓ Setup Complete",
-                "✓ Settings saved!\n\nYour credentials are stored securely on your computer.\nClick OK to continue."
-            )
-            self.result = {"api_key": api_key, "credentials_file": str(cred_dest)}
-            self.destroy()
-        
-        except Exception as e:
-            messagebox.showerror("❌ Save Error", f"Failed to save settings: {str(e)}")
+        # Test in background
+        self.after(100, lambda: self._test_and_continue(api_key))
     
     def _validate_credentials_file(self, file_path):
         """Validate that the credentials file is a valid OAuth credentials file"""
@@ -828,6 +772,187 @@ class SetupScreen(ctk.CTkToplevel):
         
         except Exception as e:
             return False
+    
+    def _show_testing_dialog(self):
+        """Show a clean testing dialog with loading animation"""
+        self.test_dialog = ctk.CTkToplevel(self)
+        self.test_dialog.title("Testing API Key")
+        self.test_dialog.geometry("450x200")
+        self.test_dialog.resizable(False, False)
+        self.test_dialog.configure(fg_color="#1E1E1E")
+        self.test_dialog.transient(self)
+        
+        # Remove window border for cleaner look
+        self.test_dialog.overrideredirect(True)
+        
+        # Center on screen
+        self.test_dialog.update_idletasks()
+        screen_w = self.test_dialog.winfo_screenwidth()
+        screen_h = self.test_dialog.winfo_screenheight()
+        x = (screen_w - 450) // 2
+        y = (screen_h - 200) // 2
+        self.test_dialog.geometry(f"+{x}+{y}")
+        
+        # Main container with border
+        container = ctk.CTkFrame(self.test_dialog, fg_color="#1E1E1E", border_width=1, border_color="#444444", corner_radius=8)
+        container.pack(fill="both", expand=True, padx=0, pady=0)
+        
+        # Content
+        content = ctk.CTkFrame(container, fg_color="#1E1E1E")
+        content.pack(fill="both", expand=True, padx=40, pady=40)
+        
+        # Icon/Spinner area
+        icon_label = ctk.CTkLabel(
+            content,
+            text="🔄",
+            font=("Segoe UI", 40),
+            text_color="#4CAF50"
+        )
+        icon_label.pack(pady=(0, 15))
+        
+        # Title
+        title = ctk.CTkLabel(
+            content,
+            text="Testing API Key",
+            font=("Segoe UI", 18, "bold"),
+            text_color="#FFFFFF"
+        )
+        title.pack(pady=(0, 8))
+        
+        # Animated loading text
+        self.loading_label = ctk.CTkLabel(
+            content,
+            text="Connecting to Google Gemini API",
+            font=("Segoe UI", 11),
+            text_color="#AAAAAA"
+        )
+        self.loading_label.pack(pady=(0, 0))
+        
+        # Animate the loading text
+        self._animate_loading_text(0)
+        
+        # Rotate the spinner icon
+        self._rotate_spinner(icon_label, 0)
+    
+    def _animate_progress_dots(self, label, step):
+        """Animate progress dots"""
+        if not hasattr(self, 'test_dialog') or not self.test_dialog.winfo_exists():
+            return
+        
+        dots = ["●   ●   ●", "  ●   ●  ", "    ●    ", "  ●   ●  "]
+        label.configure(text=dots[step % 4])
+        
+        # Continue animation every 200ms
+        self.after(200, lambda: self._animate_progress_dots(label, step + 1))
+    
+    def _test_and_continue(self, api_key):
+        """Test API key and continue with save if valid"""
+        valid = self.test_gemini_api_key(api_key)
+        
+        # Close testing dialog
+        if hasattr(self, 'test_dialog') and self.test_dialog.winfo_exists():
+            self.test_dialog.destroy()
+        
+        if not valid:
+            self.api_entry.configure(state="normal")
+            self.save_btn.configure(state="normal")
+            messagebox.showerror(
+                "❌ Invalid API Key",
+                "The API key you provided is invalid or not working.\n\n"
+                "Please check:\n"
+                "1. The key is correct and not expired\n"
+                "2. The key is enabled on Google Cloud Console\n"
+                "3. Gemini API is enabled for your project\n\n"
+                "Get a key from: https://aistudio.google.com/app/apikey"
+            )
+            self.api_entry.focus()
+            return
+        
+        self.api_entry.configure(state="normal")
+        self.save_btn.configure(state="normal")
+        
+        # API key is valid - continue with saving settings
+        self._finish_save(api_key)
+    
+    def _animate_loading_text(self, step):
+        """Animate loading text with dots"""
+        if not hasattr(self, 'test_dialog') or not self.test_dialog.winfo_exists():
+            return
+        
+        texts = [
+            "Connecting to Google Gemini API",
+            "Connecting to Google Gemini API.",
+            "Connecting to Google Gemini API..",
+            "Connecting to Google Gemini API..."
+        ]
+        
+        if hasattr(self, 'loading_label') and self.loading_label.winfo_exists():
+            self.loading_label.configure(text=texts[step % 4])
+        
+        # Continue animation every 400ms
+        self.after(400, lambda: self._animate_loading_text(step + 1))
+    
+    def _rotate_spinner(self, label, step):
+        """Rotate spinner icon"""
+        if not hasattr(self, 'test_dialog') or not self.test_dialog.winfo_exists():
+            return
+        
+        spinners = ["◜", "◝", "◞", "◟"]
+        
+        if label.winfo_exists():
+            label.configure(text=spinners[step % 4])
+        
+        # Continue rotation every 150ms
+        self.after(150, lambda: self._rotate_spinner(label, step + 1))
+    
+    def _finish_save(self, api_key):
+        """Complete the save process after API key is validated"""
+        # Everything is valid - save settings
+        try:
+            # Create AppData folder if it doesn't exist
+            app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
+            app_data_path.mkdir(parents=True, exist_ok=True)
+            
+            # Remove old credential files (*.json files except the new one we're about to save)
+            source_filename = os.path.basename(self.credentials_file_path)
+            if app_data_path.exists():
+                for old_file in app_data_path.glob('*.json'):
+                    if old_file.is_file() and old_file.name != source_filename:
+                        try:
+                            old_file.unlink()  # Delete the old file
+                        except Exception:
+                            pass  # Silently skip if we can't delete
+            
+            # Save API key to .env
+            env_file = app_data_path / ".env"
+            with open(env_file, 'w') as f:
+                f.write(f"GEMINI_API_KEY={api_key}\n")
+            
+            # Copy credentials file (preserve original filename)
+            cred_dest = app_data_path / source_filename
+            with open(self.credentials_file_path, 'r') as src:
+                with open(cred_dest, 'w') as dst:
+                    dst.write(src.read())
+            
+            # Create a marker file to indicate setup is complete
+            setup_marker = app_data_path / ".setup_complete"
+            setup_marker.touch()
+            
+            # Update global config with new paths
+            import config as config_module
+            config_module.GMAIL_CREDENTIALS_FILE = str(cred_dest)
+            config_module.GEMINI_API_KEY = api_key
+            
+            messagebox.showinfo(
+                "✓ Setup Complete",
+                "✓ Settings saved!\n\nYour credentials are stored securely on your computer."
+            )
+            self.result = {"api_key": api_key, "credentials_file": str(cred_dest)}
+            # Auto-close setup dialog after showing success message
+            self.after(100, self.destroy)
+        
+        except Exception as e:
+            messagebox.showerror("❌ Save Error", f"Failed to save settings: {str(e)}")
     
     def skip_setup(self):
         """Skip setup - prompt varies based on what user entered"""
