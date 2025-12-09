@@ -277,8 +277,24 @@ def gemini_summarize_and_reply(body):
     {body}
     """
         
-        # Include API key in the URL for Gemini API (read from config module)
-        api_url = f"{GEMINI_ENDPOINT}?key={config.GEMINI_API_KEY}"
+        # Get API key from AppData/.env (priority) or config module (fallback)
+        api_key = ""
+        try:
+            app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
+            env_file_path = app_data_path / ".env"
+            if env_file_path.exists():
+                from dotenv import dotenv_values
+                env_vars = dotenv_values(env_file_path)
+                api_key = env_vars.get('GEMINI_API_KEY', '').strip()
+        except Exception:
+            pass
+        
+        # Fallback to config if not found in AppData
+        if not api_key:
+            api_key = config.GEMINI_API_KEY.strip() if config.GEMINI_API_KEY else ""
+        
+        # Include API key in the URL for Gemini API
+        api_url = f"{GEMINI_ENDPOINT}?key={api_key}"
         
         headers = {
             "Content-Type": "application/json"
@@ -375,8 +391,8 @@ class EmailListItem(ctk.CTkFrame):
     
     def _on_click(self, event=None):
         self.is_selected = True
-        # Material Design: Use primary color with subtle elevation
-        self.main_frame.configure(fg_color=COLOR_PRIMARY_LIGHT, border_color=COLOR_PRIMARY)
+        # Active tab: green border only, no background color change
+        self.main_frame.configure(fg_color=COLOR_SURFACE, border_color=COLOR_ACCENT, border_width=2)
         self.subject_label_ref.configure(text_color=COLOR_PRIMARY)
         self.sender_label_ref.configure(text_color=COLOR_TEXT)
         if self.command:
@@ -385,14 +401,14 @@ class EmailListItem(ctk.CTkFrame):
     def apply_selection_style(self):
         """Apply selection styling without triggering the command"""
         self.is_selected = True
-        self.main_frame.configure(fg_color=COLOR_PRIMARY_LIGHT, border_color=COLOR_PRIMARY)
+        self.main_frame.configure(fg_color=COLOR_SURFACE, border_color=COLOR_ACCENT, border_width=2)
         self.subject_label_ref.configure(text_color=COLOR_PRIMARY)
         self.sender_label_ref.configure(text_color=COLOR_TEXT)
 
     def deselect(self):
         self.is_selected = False
         # Return to default styling
-        self.main_frame.configure(fg_color=COLOR_SURFACE, border_color=COLOR_BORDER)
+        self.main_frame.configure(fg_color=COLOR_SURFACE, border_color=COLOR_BORDER, border_width=1)
         self.subject_label_ref.configure(text_color=COLOR_PRIMARY)
 
 
@@ -400,7 +416,7 @@ class EmailListItem(ctk.CTkFrame):
 class SetupScreen(ctk.CTkToplevel):
     """First-time setup wizard for credentials and API keys"""
     
-    def __init__(self, parent, is_change_mode=False):
+    def __init__(self, parent, is_change_mode=False, previous_api_key=None, previous_creds_file=None):
         super().__init__(parent)
         self.parent_app = parent
         self.is_change_mode = is_change_mode
@@ -439,9 +455,12 @@ class SetupScreen(ctk.CTkToplevel):
         
         self.geometry(f"+{int(x)}+{int(y)}")
         
-        self.credentials_file_path = None
+        self.credentials_file_path = previous_creds_file  # Auto-fill if provided
         self.result = {"api_key": "", "credentials_file": None}
+        self.changes_made = False  # Track if user actually made changes
         self.user_cancelled = False  # Track if user closed without saving
+        self.previous_api_key = previous_api_key  # Store for comparison
+        self.previous_creds_file = previous_creds_file  # Store for comparison
         
         # Handle close button (X) - behavior depends on mode
         self.protocol("WM_DELETE_WINDOW", self.on_window_close)
@@ -528,6 +547,10 @@ class SetupScreen(ctk.CTkToplevel):
         )
         self.api_entry.pack(fill="x", padx=15, pady=(0, 15))
         
+        # Auto-fill with previous API key if in change mode
+        if self.previous_api_key:
+            self.api_entry.insert(0, self.previous_api_key)
+        
         # ===== SECTION 2: CREDENTIALS FILE =====
         cred_section = ctk.CTkFrame(container, fg_color=COLOR_SURFACE, corner_radius=8)
         cred_section.pack(fill="x", pady=(0, 20))
@@ -571,6 +594,12 @@ class SetupScreen(ctk.CTkToplevel):
             text_color="#FF6B6B"
         )
         self.file_status.pack(side="right", padx=(10, 0))
+        
+        # Auto-fill file status if credentials file was provided
+        if self.credentials_file_path:
+            filename = os.path.basename(self.credentials_file_path)
+            self.file_status.configure(text=f"✓ {filename}", text_color="#4CAF50")
+            self.upload_btn.configure(text="📁 Change File")
         
         # ===== SECURITY INFO =====
         security_section = ctk.CTkFrame(container, fg_color="#1B5E20", corner_radius=8)
@@ -687,18 +716,37 @@ class SetupScreen(ctk.CTkToplevel):
             )
             return
         
+        # In change mode, check if anything actually changed
+        if self.is_change_mode:
+            # Check if API key changed
+            api_key_changed = (api_key != self.previous_api_key) if self.previous_api_key else True
+            
+            # Check if credentials file changed (if user selected a new one)
+            creds_changed = (self.credentials_file_path != self.previous_creds_file) if self.previous_creds_file else False
+            
+            # If nothing changed, just close without testing or validation
+            if not api_key_changed and not creds_changed:
+                self.result = {"api_key": api_key, "credentials_file": self.credentials_file_path}
+                self.changes_made = False  # Mark that no changes were made
+                self.update_idletasks()  # Ensure any pending updates are processed
+                self.destroy()
+                return
+        
         # Re-validate credentials file before saving (in case it was modified or is invalid)
-        if not self._validate_credentials_file(self.credentials_file_path):
-            messagebox.showerror(
-                "Invalid Credentials File",
-                "The selected credentials file is no longer valid.\n\n"
-                "Please select a valid OAuth credentials file from:\n"
-                "Google Cloud Console → APIs & Services → Credentials"
-            )
-            self.credentials_file_path = None
-            self.file_status.configure(text="❌ Not selected", text_color="#FF6B6B")
-            self.upload_btn.configure(text="📁 Select credentials.json")
-            return
+        # BUT: In change mode, if user didn't change the credentials file, skip validation
+        # (they're only changing the API key)
+        if self.credentials_file_path and os.path.exists(self.credentials_file_path):
+            if not self._validate_credentials_file(self.credentials_file_path):
+                messagebox.showerror(
+                    "Invalid Credentials File",
+                    "The selected credentials file is no longer valid.\n\n"
+                    "Please select a valid OAuth credentials file from:\n"
+                    "Google Cloud Console → APIs & Services → Credentials"
+                )
+                self.credentials_file_path = None
+                self.file_status.configure(text="❌ Not selected", text_color="#FF6B6B")
+                self.upload_btn.configure(text="📁 Select credentials.json")
+                return
         
         # Validate API key by testing it
         self.api_entry.configure(state="disabled")
@@ -777,62 +825,72 @@ class SetupScreen(ctk.CTkToplevel):
         """Show a clean testing dialog with loading animation"""
         self.test_dialog = ctk.CTkToplevel(self)
         self.test_dialog.title("Testing API Key")
-        self.test_dialog.geometry("450x200")
+        self.test_dialog.geometry("450x240")
         self.test_dialog.resizable(False, False)
         self.test_dialog.configure(fg_color="#1E1E1E")
         self.test_dialog.transient(self)
         
-        # Remove window border for cleaner look
-        self.test_dialog.overrideredirect(True)
+        # Make it stay on top
+        self.test_dialog.lift()
+        try:
+            self.test_dialog.grab_set()
+        except:
+            pass
         
         # Center on screen
         self.test_dialog.update_idletasks()
         screen_w = self.test_dialog.winfo_screenwidth()
         screen_h = self.test_dialog.winfo_screenheight()
         x = (screen_w - 450) // 2
-        y = (screen_h - 200) // 2
+        y = (screen_h - 240) // 2
         self.test_dialog.geometry(f"+{x}+{y}")
         
-        # Main container with border
-        container = ctk.CTkFrame(self.test_dialog, fg_color="#1E1E1E", border_width=1, border_color="#444444", corner_radius=8)
-        container.pack(fill="both", expand=True, padx=0, pady=0)
-        
-        # Content
-        content = ctk.CTkFrame(container, fg_color="#1E1E1E")
-        content.pack(fill="both", expand=True, padx=40, pady=40)
+        # Main container with padding
+        container = ctk.CTkFrame(self.test_dialog, fg_color="#1E1E1E")
+        container.pack(fill="both", expand=True, padx=20, pady=25)
         
         # Icon/Spinner area
-        icon_label = ctk.CTkLabel(
-            content,
-            text="🔄",
-            font=("Segoe UI", 40),
+        self.icon_label = ctk.CTkLabel(
+            container,
+            text="◜",
+            font=("Segoe UI", 45),
             text_color="#4CAF50"
         )
-        icon_label.pack(pady=(0, 15))
+        self.icon_label.pack(pady=(10, 15))
         
         # Title
         title = ctk.CTkLabel(
-            content,
-            text="Testing API Key",
-            font=("Segoe UI", 18, "bold"),
+            container,
+            text="Testing API Key & Credentials",
+            font=("Segoe UI", 16, "bold"),
             text_color="#FFFFFF"
         )
-        title.pack(pady=(0, 8))
+        title.pack(pady=(0, 12))
         
         # Animated loading text
         self.loading_label = ctk.CTkLabel(
-            content,
+            container,
             text="Connecting to Google Gemini API",
             font=("Segoe UI", 11),
-            text_color="#AAAAAA"
+            text_color="#CCCCCC"
         )
-        self.loading_label.pack(pady=(0, 0))
+        self.loading_label.pack(pady=(0, 15))
         
-        # Animate the loading text
+        # Status message
+        self.status_label = ctk.CTkLabel(
+            container,
+            text="Please wait...",
+            font=("Segoe UI", 10),
+            text_color="#888888"
+        )
+        self.status_label.pack(pady=(0, 0))
+        
+        # Ensure window is drawn before starting animations
+        self.test_dialog.update()
+        
+        # Start animations
         self._animate_loading_text(0)
-        
-        # Rotate the spinner icon
-        self._rotate_spinner(icon_label, 0)
+        self._rotate_spinner(0)
     
     def _animate_progress_dots(self, label, step):
         """Animate progress dots"""
@@ -876,34 +934,40 @@ class SetupScreen(ctk.CTkToplevel):
     
     def _animate_loading_text(self, step):
         """Animate loading text with dots"""
-        if not hasattr(self, 'test_dialog') or not self.test_dialog.winfo_exists():
-            return
-        
-        texts = [
-            "Connecting to Google Gemini API",
-            "Connecting to Google Gemini API.",
-            "Connecting to Google Gemini API..",
-            "Connecting to Google Gemini API..."
-        ]
-        
-        if hasattr(self, 'loading_label') and self.loading_label.winfo_exists():
-            self.loading_label.configure(text=texts[step % 4])
-        
-        # Continue animation every 400ms
-        self.after(400, lambda: self._animate_loading_text(step + 1))
+        try:
+            if not hasattr(self, 'test_dialog') or not self.test_dialog.winfo_exists():
+                return
+            
+            texts = [
+                "Connecting to Google Gemini API",
+                "Connecting to Google Gemini API.",
+                "Connecting to Google Gemini API..",
+                "Connecting to Google Gemini API..."
+            ]
+            
+            if hasattr(self, 'loading_label') and self.loading_label.winfo_exists():
+                self.loading_label.configure(text=texts[step % 4])
+            
+            # Continue animation every 400ms
+            self.after(400, lambda: self._animate_loading_text(step + 1))
+        except:
+            pass
     
-    def _rotate_spinner(self, label, step):
+    def _rotate_spinner(self, step):
         """Rotate spinner icon"""
-        if not hasattr(self, 'test_dialog') or not self.test_dialog.winfo_exists():
-            return
-        
-        spinners = ["◜", "◝", "◞", "◟"]
-        
-        if label.winfo_exists():
-            label.configure(text=spinners[step % 4])
-        
-        # Continue rotation every 150ms
-        self.after(150, lambda: self._rotate_spinner(label, step + 1))
+        try:
+            if not hasattr(self, 'test_dialog') or not self.test_dialog.winfo_exists():
+                return
+            
+            spinners = ["◜", "◝", "◞", "◟"]
+            
+            if hasattr(self, 'icon_label') and self.icon_label.winfo_exists():
+                self.icon_label.configure(text=spinners[step % 4])
+            
+            # Continue rotation every 150ms
+            self.after(150, lambda: self._rotate_spinner(step + 1))
+        except:
+            pass
     
     def _finish_save(self, api_key):
         """Complete the save process after API key is validated"""
@@ -913,26 +977,36 @@ class SetupScreen(ctk.CTkToplevel):
             app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
             app_data_path.mkdir(parents=True, exist_ok=True)
             
-            # Remove old credential files (*.json files except the new one we're about to save)
-            source_filename = os.path.basename(self.credentials_file_path)
-            if app_data_path.exists():
-                for old_file in app_data_path.glob('*.json'):
-                    if old_file.is_file() and old_file.name != source_filename:
-                        try:
-                            old_file.unlink()  # Delete the old file
-                        except Exception:
-                            pass  # Silently skip if we can't delete
-            
             # Save API key to .env
             env_file = app_data_path / ".env"
             with open(env_file, 'w') as f:
                 f.write(f"GEMINI_API_KEY={api_key}\n")
             
-            # Copy credentials file (preserve original filename)
-            cred_dest = app_data_path / source_filename
-            with open(self.credentials_file_path, 'r') as src:
-                with open(cred_dest, 'w') as dst:
-                    dst.write(src.read())
+            # Only copy/update credentials file if a new one was selected
+            cred_dest = None
+            if self.credentials_file_path and os.path.exists(self.credentials_file_path):
+                # Remove old credential files (*.json files except the new one we're about to save)
+                source_filename = os.path.basename(self.credentials_file_path)
+                if app_data_path.exists():
+                    for old_file in app_data_path.glob('*.json'):
+                        if old_file.is_file() and old_file.name != source_filename:
+                            try:
+                                old_file.unlink()  # Delete the old file
+                            except Exception:
+                                pass  # Silently skip if we can't delete
+                
+                # Copy credentials file (preserve original filename)
+                cred_dest = app_data_path / source_filename
+                with open(self.credentials_file_path, 'r') as src:
+                    with open(cred_dest, 'w') as dst:
+                        dst.write(src.read())
+            else:
+                # No new credentials file selected - find existing one
+                if app_data_path.exists():
+                    for file in app_data_path.glob('*.json'):
+                        if file.is_file():
+                            cred_dest = file
+                            break
             
             # Create a marker file to indicate setup is complete
             setup_marker = app_data_path / ".setup_complete"
@@ -940,14 +1014,16 @@ class SetupScreen(ctk.CTkToplevel):
             
             # Update global config with new paths
             import config as config_module
-            config_module.GMAIL_CREDENTIALS_FILE = str(cred_dest)
             config_module.GEMINI_API_KEY = api_key
+            if cred_dest:
+                config_module.GMAIL_CREDENTIALS_FILE = str(cred_dest)
             
             messagebox.showinfo(
                 "✓ Setup Complete",
                 "✓ Settings saved!\n\nYour credentials are stored securely on your computer."
             )
-            self.result = {"api_key": api_key, "credentials_file": str(cred_dest)}
+            self.result = {"api_key": api_key, "credentials_file": str(cred_dest) if cred_dest else None}
+            self.changes_made = True  # Mark that changes were actually saved
             # Auto-close setup dialog after showing success message
             self.after(100, self.destroy)
         
@@ -1701,11 +1777,29 @@ class EmailSummarizerApp(ctk.CTk):
     
     def open_change_credentials(self):
         """Open the setup screen to change credentials and API key"""
-        setup_screen = SetupScreen(self, is_change_mode=True)
+        # Get current credentials to pre-fill the form
+        app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
+        env_file_path = app_data_path / ".env"
+        
+        # Get current API key
+        from dotenv import dotenv_values
+        env_vars = dotenv_values(env_file_path) if env_file_path.exists() else {}
+        current_api_key = env_vars.get('GEMINI_API_KEY', '') or config.GEMINI_API_KEY
+        
+        # Get current credentials file
+        current_creds_file = None
+        if app_data_path.exists():
+            for file in app_data_path.glob('*.json'):
+                if file.is_file():
+                    current_creds_file = str(file)
+                    break
+        
+        # Open setup screen with previous credentials pre-filled
+        setup_screen = SetupScreen(self, is_change_mode=True, previous_api_key=current_api_key, previous_creds_file=current_creds_file)
         self.wait_window(setup_screen)
         
-        # Check if user actually saved changes (not just closed or skipped)
-        if setup_screen.result.get("api_key") or setup_screen.result.get("credentials_file"):
+        # Check if user actually made changes (flag is set to True only when changes are saved)
+        if setup_screen.changes_made:
             # User saved changes - reload config
             try:
                 app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
@@ -2164,9 +2258,24 @@ class EmailSummarizerApp(ctk.CTk):
     
     def load_emails(self):
         try:
-            # Check if API key is available BEFORE loading emails (read from config module, not global)
-            current_api_key = config.GEMINI_API_KEY
-            if not current_api_key or not current_api_key.strip():
+            # Check if API key is available BEFORE loading emails
+            # Priority: AppData/.env (most recent), then config module (fallback)
+            current_api_key = ""
+            try:
+                app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
+                env_file_path = app_data_path / ".env"
+                if env_file_path.exists():
+                    from dotenv import dotenv_values
+                    env_vars = dotenv_values(env_file_path)
+                    current_api_key = env_vars.get('GEMINI_API_KEY', '').strip()
+            except Exception:
+                pass
+            
+            # Fallback to config if not found in AppData
+            if not current_api_key:
+                current_api_key = config.GEMINI_API_KEY.strip() if config.GEMINI_API_KEY else ""
+            
+            if not current_api_key:
                 # API key is missing - show credentials setup screen instead of just an error
                 self.after(0, lambda: self._handle_missing_api_key_on_load())
                 self.load_btn.configure(state="normal", text="📧 Load Emails")
