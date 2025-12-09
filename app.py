@@ -152,6 +152,15 @@ COLOR_TEXT = "#E8EAED"
 COLOR_TEXT_SECONDARY = "#9AA0A6"
 COLOR_BORDER = "#3F3F3F"
 
+# Current colors mapping (start with dark theme)
+CURRENT_COLORS = {
+    "bg": COLOR_BG,
+    "surface": COLOR_SURFACE,
+    "text": COLOR_TEXT,
+    "surface_dark": COLOR_SURFACE_DARK,
+    "primary": COLOR_PRIMARY,
+}
+
 # ========== FONT SIZES ==========
 FONT_XS = 10      # Extra small - secondary text
 FONT_SM = 10     # Small - labels, combobox
@@ -393,6 +402,7 @@ class SetupScreen(ctk.CTkToplevel):
     
     def __init__(self, parent, is_change_mode=False):
         super().__init__(parent)
+        self.parent_app = parent
         self.is_change_mode = is_change_mode
         
         if is_change_mode:
@@ -406,7 +416,8 @@ class SetupScreen(ctk.CTkToplevel):
         
         # Make it modal
         self.transient(parent)
-        self.grab_set()
+        # Don't use grab_set() - it prevents minimizing
+        # Just use transient() to keep it on top of parent
         
         # Center on screen
         parent.update_idletasks()
@@ -442,10 +453,15 @@ class SetupScreen(ctk.CTkToplevel):
         self.focus()
     
     def on_window_close(self):
-        """Handle window close button (X) - just close the dialog"""
-        # Mark as cancelled so we don't keep showing the dialog
+        """Handle window close button (X) - notify parent to exit if during setup"""
         self.user_cancelled = True
-        # Simply close the dialog - let the parent app decide what to do
+        
+        # If this is first-time setup (not change mode), tell parent to exit completely
+        if not self.is_change_mode and hasattr(self.parent_app, 'close_requested'):
+            self.parent_app.close_requested = True
+            self.parent_app.setup_in_progress = False
+        
+        # Close this dialog
         self.destroy()
     
     def create_setup_ui(self):
@@ -605,16 +621,46 @@ class SetupScreen(ctk.CTkToplevel):
         
         if file_path:
             try:
-                # Validate it's a valid JSON and has expected Gmail structure
+                # Validate it's a valid JSON and has expected Gmail OAuth structure
                 with open(file_path, 'r') as f:
                     data = json.load(f)
-                    if 'installed' in data or 'web' in data:
-                        self.credentials_file_path = file_path
-                        filename = os.path.basename(file_path)
-                        self.file_status.configure(text=f"✓ {filename}", text_color="#4CAF50")
-                        self.upload_btn.configure(text="📁 Change File")
-                    else:
-                        messagebox.showerror("Invalid File", "This doesn't appear to be a valid OAuth credentials file")
+                    
+                    # Check if it has the OAuth structure
+                    if not ('installed' in data or 'web' in data):
+                        messagebox.showerror("Invalid File", "This doesn't appear to be a valid OAuth credentials file (missing 'installed' or 'web' key)")
+                        return
+                    
+                    # Get the config section (either 'installed' or 'web')
+                    oauth_config = data.get('installed', data.get('web', {}))
+                    
+                    # Validate required fields for OAuth credentials
+                    required_fields = ['client_id', 'client_secret', 'redirect_uris']
+                    missing_fields = [field for field in required_fields if field not in oauth_config]
+                    
+                    if missing_fields:
+                        messagebox.showerror(
+                            "Invalid Credentials File",
+                            f"This credentials file is incomplete. Missing required fields:\n"
+                            f"{', '.join(missing_fields)}\n\n"
+                            f"Please download a valid OAuth credentials file from:\n"
+                            f"Google Cloud Console → APIs & Services → Credentials"
+                        )
+                        return
+                    
+                    # Additional validation: check if redirect_uris is non-empty
+                    if not oauth_config.get('redirect_uris') or not isinstance(oauth_config.get('redirect_uris'), list):
+                        messagebox.showerror(
+                            "Invalid Credentials File",
+                            "This credentials file has no redirect URIs configured.\n\n"
+                            "Please ensure your OAuth credentials are properly configured."
+                        )
+                        return
+                    
+                    # All validations passed
+                    self.credentials_file_path = file_path
+                    filename = os.path.basename(file_path)
+                    self.file_status.configure(text=f"✓ {filename}", text_color="#4CAF50")
+                    self.upload_btn.configure(text="📁 Change File")
             except json.JSONDecodeError:
                 messagebox.showerror("Invalid JSON", "The selected file is not a valid JSON file")
             except Exception as e:
@@ -639,6 +685,19 @@ class SetupScreen(ctk.CTkToplevel):
                 "1. Get it from Google Cloud Console\n"
                 "2. Skip Setup & Set it up later using 'Change Credentials'"
             )
+            return
+        
+        # Re-validate credentials file before saving (in case it was modified or is invalid)
+        if not self._validate_credentials_file(self.credentials_file_path):
+            messagebox.showerror(
+                "Invalid Credentials File",
+                "The selected credentials file is no longer valid.\n\n"
+                "Please select a valid OAuth credentials file from:\n"
+                "Google Cloud Console → APIs & Services → Credentials"
+            )
+            self.credentials_file_path = None
+            self.file_status.configure(text="❌ Not selected", text_color="#FF6B6B")
+            self.upload_btn.configure(text="📁 Select credentials.json")
             return
         
         # Validate API key by testing it
@@ -706,6 +765,35 @@ class SetupScreen(ctk.CTkToplevel):
         
         except Exception as e:
             messagebox.showerror("❌ Save Error", f"Failed to save settings: {str(e)}")
+    
+    def _validate_credentials_file(self, file_path):
+        """Validate that the credentials file is a valid OAuth credentials file"""
+        try:
+            if not os.path.exists(file_path):
+                return False
+            
+            with open(file_path, 'r') as f:
+                data = json.load(f)
+                
+                # Check if it has the OAuth structure
+                if not ('installed' in data or 'web' in data):
+                    return False
+                
+                # Get the config section (either 'installed' or 'web')
+                oauth_config = data.get('installed', data.get('web', {}))
+                
+                # Validate required fields for OAuth credentials
+                required_fields = ['client_id', 'client_secret', 'redirect_uris']
+                if not all(field in oauth_config for field in required_fields):
+                    return False
+                
+                # Check if redirect_uris is non-empty
+                if not oauth_config.get('redirect_uris') or not isinstance(oauth_config.get('redirect_uris'), list):
+                    return False
+                
+                return True
+        except Exception:
+            return False
     
     def test_gemini_api_key(self, api_key):
         """Test if the Gemini API key is valid"""
@@ -980,6 +1068,11 @@ class EmailSummarizerApp(ctk.CTk):
         self.max_emails = 5
         self.summarize_on_load = tk.BooleanVar(value=False)  # Toggle: lazy vs eager
         self.current_theme = "dark"  # Track current theme
+        self.setup_in_progress = True  # Track if setup is happening
+        self.close_requested = False  # Track if user clicked close button
+        
+        # Handle close button - always use this handler
+        self.protocol("WM_DELETE_WINDOW", self.on_close_requested)
         
         # Withdraw window during setup to avoid showing background window
         self.withdraw()
@@ -989,12 +1082,36 @@ class EmailSummarizerApp(ctk.CTk):
         # This will block until setup is complete if needed
         self._do_first_time_setup()
         
+        # If user closed the window, exit now
+        if self.close_requested:
+            self.destroy()
+            return
+        
+        # Mark setup as complete
+        self.setup_in_progress = False
+        
         # Now create widgets only after setup is done
         self.create_widgets()
         self.check_login_status()
         
         # Show the window at full size
         self.after(0, self._show_fullscreen)
+    
+    def on_close_requested(self):
+        """Handle window close button (X) - exit immediately"""
+        self.close_requested = True
+        self.setup_in_progress = False
+
+        # Tear down any active setup dialog
+        if hasattr(self, '_setup_screen') and self._setup_screen and self._setup_screen.winfo_exists():
+            try:
+                self._setup_screen.destroy()
+            except:
+                pass
+
+        self.destroy()
+        import sys
+        sys.exit(0)
     
     def create_widgets(self):
         # ===== HEADER =====
@@ -1350,13 +1467,18 @@ class EmailSummarizerApp(ctk.CTk):
     def _do_first_time_setup(self):
         """Check for first-time setup before creating any widgets"""
         try:
-            # Keep checking until setup is complete or credentials are available
-            max_attempts = 3
-            attempt = 0
-            user_cancelled = False
+            import importlib
+            import sys
+            from dotenv import load_dotenv, dotenv_values
             
-            while attempt < max_attempts:
-                attempt += 1
+            # Keep looping until setup is complete (user cannot skip if no credentials exist)
+            while self.setup_in_progress and not self.close_requested:
+                # Allow window events to be processed
+                self.update()
+                
+                # Check if window was closed
+                if self.close_requested or not self.setup_in_progress:
+                    return
                 
                 # Check for credentials in order of priority:
                 # 1. Local credentials.json (most common for BAT file launch)
@@ -1396,7 +1518,6 @@ class EmailSummarizerApp(ctk.CTk):
                     cred_exists = os.path.exists(config_module.GMAIL_CREDENTIALS_FILE)
                 
                 # Check if API key exists
-                from dotenv import dotenv_values
                 app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
                 env_file_path = app_data_path / ".env"
                 
@@ -1407,54 +1528,42 @@ class EmailSummarizerApp(ctk.CTk):
                 import config as config_module
                 api_key_exists = bool(api_key_from_env or (config_module.GEMINI_API_KEY and config_module.GEMINI_API_KEY.strip()))
                 
-                # Check if setup is needed
-                needs_setup = not cred_exists or not api_key_exists
+                # Check if setup is complete
+                setup_complete = cred_exists and api_key_exists
                 
-                if not needs_setup:
-                    # Setup is complete, exit the loop
+                if setup_complete:
+                    # All credentials and API key are available - exit setup loop
                     break
                 
-                # Show setup screen - this blocks until the window closes
-                setup_screen = SetupScreen(self)
-                self.wait_window(setup_screen)
+                # If user closed the window, exit immediately
+                if self.close_requested or not self.setup_in_progress:
+                    return
                 
-                # Check if user cancelled (closed without saving)
-                if hasattr(setup_screen, 'user_cancelled') and setup_screen.user_cancelled:
-                    # User closed the dialog without saving
-                    user_cancelled = True
-                    break
+                # Setup is not complete - show setup screen (user cannot skip)
+                self._setup_screen = SetupScreen(self, is_change_mode=False)
+                self.wait_window(self._setup_screen)
+                
+                # Check again if user closed the window while setup was showing
+                if self.close_requested or not self.setup_in_progress:
+                    return
                 
                 # After setup closes, reload .env and config to pick up new values
                 try:
-                    import importlib
-                    import sys
-                    from dotenv import load_dotenv
-                    
                     # Reload dotenv to pick up new .env file
                     load_dotenv(env_file_path, override=True)
                     
                     # Reload config module to get updated values
                     if 'config' in sys.modules:
                         importlib.reload(sys.modules['config'])
+                        config_module = sys.modules['config']
                     
                     # Update the global GEMINI_API_KEY from reloaded config
-                    import config as config_module
                     globals()['GEMINI_API_KEY'] = config_module.GEMINI_API_KEY
                 except Exception as e:
                     pass
-            
-            # If user cancelled and we still don't have credentials, exit the program
-            if user_cancelled:
-                # Check one more time if credentials are available
-                cred_exists = os.path.exists('credentials.json') or os.path.exists(config_module.GMAIL_CREDENTIALS_FILE)
-                import config as config_module
-                api_key_exists = bool(config_module.GEMINI_API_KEY and config_module.GEMINI_API_KEY.strip())
                 
-                if not cred_exists or not api_key_exists:
-                    # No credentials and user cancelled - quit the program
-                    self.destroy()
-                    import sys
-                    sys.exit(0)
+                # Loop back to check if setup was completed successfully
+                # If user cancelled without saving, the loop will show the setup screen again
         except Exception as e:
             # Silently fail - setup may have been cancelled
             pass
@@ -1666,9 +1775,24 @@ class EmailSummarizerApp(ctk.CTk):
                 # respond with simple page
                 try:
                     self_inner.send_response(200)
-                    self_inner.send_header('Content-type', 'text/html')
+                    self_inner.send_header('Content-type', 'text/html; charset=utf-8')
                     self_inner.end_headers()
-                    self_inner.wfile.write(b"<html><body><h3>You can close this window and return to the app.</h3></body></html>")
+                    response_html = """
+                    <html>
+                    <head><title>Email Summarizer Pro - Login Complete</title></head>
+                    <body style="font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        <div style="text-align: center; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                            <h2 style="color: #333; margin-top: 0;">\u2713 Login Successful!</h2>
+                            <p style="color: #666; font-size: 16px;">You can safely close this window and return to the app.</p>
+                            <p style="color: #999; font-size: 14px;">The app will now load your emails.</p>
+                        </div>
+                    </body>
+                    </html>
+                    """
+                    try:
+                        self_inner.wfile.write(response_html.encode('utf-8'))
+                    except Exception:
+                        pass
                 except Exception:
                     pass
             def log_message(self_inner, format, *args):
@@ -1690,11 +1814,19 @@ class EmailSummarizerApp(ctk.CTk):
         except Exception:
             return None
 
-        # Open browser
+        # Open browser for initial auth URL
+        browser_opened = False
         try:
-            webbrowser.open(auth_url)
+            # Try to open in existing browser window/tab
+            webbrowser.open(auth_url, new=0)
+            browser_opened = True
         except Exception:
-            pass
+            try:
+                # Fallback: open in new window if new=0 fails
+                webbrowser.open(auth_url, new=1)
+                browser_opened = True
+            except Exception:
+                pass
 
         # Callback function for monitor window to check login completion
         auth_params_holder = {'params': None}
@@ -1878,6 +2010,16 @@ class EmailSummarizerApp(ctk.CTk):
         except Exception as e:
             pass  # Silently fail if update doesn't work
     
+    def _handle_missing_api_key_on_load(self):
+        """Handle missing API key when user tries to load emails - open credentials setup"""
+        response = messagebox.askyesno(
+            "❌ Missing API Key",
+            "Cannot load emails without a valid Gemini API key.\n\n"
+            "Do you want to add your API key now?"
+        )
+        if response:
+            self.open_change_credentials()
+    
     def clear_emails(self):
         for widget in self.email_list_frame.winfo_children():
             widget.destroy()
@@ -1900,11 +2042,8 @@ class EmailSummarizerApp(ctk.CTk):
             # Check if API key is available BEFORE loading emails (read from config module, not global)
             current_api_key = config.GEMINI_API_KEY
             if not current_api_key or not current_api_key.strip():
-                messagebox.showerror(
-                    "❌ Missing API Key",
-                    "Cannot load emails without a valid Gemini API key.\n\n"
-                    "Please go to 'Change Credentials' to add your API key."
-                )
+                # API key is missing - show credentials setup screen instead of just an error
+                self.after(0, lambda: self._handle_missing_api_key_on_load())
                 self.load_btn.configure(state="normal", text="📧 Load Emails")
                 return
             

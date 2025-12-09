@@ -13,7 +13,16 @@ if errorlevel 1 (
 )
 
 REM Silently install/update dependencies
+REM Inform user and silently install/update dependencies
+echo Checking ^& Installing dependencies...
 python -m pip install -q -r requirements.txt >nul 2>&1
+if %errorlevel% neq 0 (
+    echo ERROR: Failed to install dependencies.
+    echo You can try running: python -m pip install -r requirements.txt
+    pause
+    exit /b 1
+)
+echo Dependencies installed successfully.
 
 REM Change to script directory and launch GUI without showing console
 cd /d "%~dp0"
