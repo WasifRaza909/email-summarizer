@@ -280,7 +280,7 @@ def gemini_summarize_and_reply(body):
         # Get API key from AppData/.env (priority) or config module (fallback)
         api_key = ""
         try:
-            app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
+            app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "ai-email-summarizer"
             env_file_path = app_data_path / ".env"
             if env_file_path.exists():
                 from dotenv import dotenv_values
@@ -521,7 +521,7 @@ class SetupScreen(ctk.CTkToplevel):
         
         api_title = ctk.CTkLabel(
             api_section,
-            text="Enter your Gemini/OpenAI API Key",
+            text="Enter your Gemini API Key",
             font=("Segoe UI", 13, "bold"),
             text_color=COLOR_PRIMARY
         )
@@ -577,7 +577,7 @@ class SetupScreen(ctk.CTkToplevel):
         
         self.upload_btn = ctk.CTkButton(
             button_frame,
-            text="📁 Select credentials.json",
+            text="📁 Select credentials .json file",
             command=self.select_credentials_file,
             fg_color=COLOR_PRIMARY,
             hover_color="#1565C0",
@@ -641,9 +641,9 @@ class SetupScreen(ctk.CTkToplevel):
         # Skip button removed to require completing setup before using the app
     
     def select_credentials_file(self):
-        """Open file dialog to select credentials.json"""
+        """Open file dialog to select credentials .json file"""
         file_path = filedialog.askopenfilename(
-            title="Select credentials.json",
+            title="Select credentials .json file",
             filetypes=[("JSON Files", "*.json"), ("All Files", "*.*")],
             initialdir=os.path.expanduser("~")
         )
@@ -745,7 +745,7 @@ class SetupScreen(ctk.CTkToplevel):
                 )
                 self.credentials_file_path = None
                 self.file_status.configure(text="❌ Not selected", text_color="#FF6B6B")
-                self.upload_btn.configure(text="📁 Select credentials.json")
+                self.upload_btn.configure(text="📁 Select credentials .json file")
                 return
         
         # Validate API key by testing it
@@ -792,7 +792,26 @@ class SetupScreen(ctk.CTkToplevel):
         try:
             import requests
             
-            test_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+            # First, validate API key format (basic sanity checks)
+            api_key_stripped = api_key.strip()
+            
+            # Check minimum length (Google API keys are typically 40+ characters)
+            if len(api_key_stripped) < 20:
+                print(f"❌ API Key too short: {len(api_key_stripped)} characters (minimum 20 required)")
+                return False
+            
+            # Check for invalid characters (API keys should be alphanumeric, dash, underscore)
+            if not all(c.isalnum() or c in '-_' for c in api_key_stripped):
+                print(f"❌ API Key contains invalid characters")
+                return False
+            
+            # Check if it looks like a Gemini/Google API key (should start with specific patterns)
+            # Gemini API keys usually start with "AIza" or similar
+            if not (api_key_stripped.startswith('AIza') or api_key_stripped.startswith('sk-')):
+                print(f"⚠️  Warning: API key doesn't match expected format (should start with 'AIza' or 'sk-')")
+                # Still allow it to be tested against the API
+            
+            test_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key_stripped}"
             
             test_payload = {
                 "contents": [
@@ -813,19 +832,27 @@ class SetupScreen(ctk.CTkToplevel):
             if 'error' in resp_json:
                 error_msg = resp_json['error'].get('message', '').lower()
                 if 'unauthenticated' in error_msg or 'invalid' in error_msg or 'unregistered' in error_msg:
+                    print(f"❌ API Key validation failed: {resp_json['error'].get('message', 'Unknown error')}")
                     return False
             
             # If we got here, key is likely valid
             return True
         
+        except requests.exceptions.Timeout:
+            print(f"❌ API Key test timed out - check your internet connection")
+            return False
+        except requests.exceptions.ConnectionError:
+            print(f"❌ Connection error - check your internet connection")
+            return False
         except Exception as e:
+            print(f"❌ Error testing API key: {str(e)}")
             return False
     
     def _show_testing_dialog(self):
         """Show a clean testing dialog with loading animation"""
         self.test_dialog = ctk.CTkToplevel(self)
         self.test_dialog.title("Testing API Key")
-        self.test_dialog.geometry("450x240")
+        self.test_dialog.geometry("420x200")
         self.test_dialog.resizable(False, False)
         self.test_dialog.configure(fg_color="#1E1E1E")
         self.test_dialog.transient(self)
@@ -841,56 +868,43 @@ class SetupScreen(ctk.CTkToplevel):
         self.test_dialog.update_idletasks()
         screen_w = self.test_dialog.winfo_screenwidth()
         screen_h = self.test_dialog.winfo_screenheight()
-        x = (screen_w - 450) // 2
-        y = (screen_h - 240) // 2
+        x = (screen_w - 420) // 2
+        y = (screen_h - 200) // 2
         self.test_dialog.geometry(f"+{x}+{y}")
         
         # Main container with padding
         container = ctk.CTkFrame(self.test_dialog, fg_color="#1E1E1E")
-        container.pack(fill="both", expand=True, padx=20, pady=25)
-        
-        # Icon/Spinner area
-        self.icon_label = ctk.CTkLabel(
-            container,
-            text="◜",
-            font=("Segoe UI", 45),
-            text_color="#4CAF50"
-        )
-        self.icon_label.pack(pady=(10, 15))
+        container.pack(fill="both", expand=True, padx=20, pady=(25, 20))
         
         # Title
         title = ctk.CTkLabel(
             container,
-            text="Testing API Key & Credentials",
-            font=("Segoe UI", 16, "bold"),
-            text_color="#FFFFFF"
+            text="🔐 Testing API Key & Credentials",
+            font=("Segoe UI", 14, "bold"),
+            text_color="#4CAF50"
         )
-        title.pack(pady=(0, 12))
+        title.pack(pady=(0, 15))
         
         # Animated loading text
         self.loading_label = ctk.CTkLabel(
             container,
             text="Connecting to Google Gemini API",
             font=("Segoe UI", 11),
-            text_color="#CCCCCC"
+            text_color="#FFFFFF"
         )
-        self.loading_label.pack(pady=(0, 15))
+        self.loading_label.pack(pady=(0, 12))
         
         # Status message
         self.status_label = ctk.CTkLabel(
             container,
-            text="Please wait...",
-            font=("Segoe UI", 10),
-            text_color="#888888"
+            text="Validating your credentials, please wait...",
+            font=("Segoe UI", 12),
+            text_color="#CCCCCC"
         )
         self.status_label.pack(pady=(0, 0))
         
         # Ensure window is drawn before starting animations
         self.test_dialog.update()
-        
-        # Start animations
-        self._animate_loading_text(0)
-        self._rotate_spinner(0)
     
     def _animate_progress_dots(self, label, step):
         """Animate progress dots"""
@@ -932,49 +946,12 @@ class SetupScreen(ctk.CTkToplevel):
         # API key is valid - continue with saving settings
         self._finish_save(api_key)
     
-    def _animate_loading_text(self, step):
-        """Animate loading text with dots"""
-        try:
-            if not hasattr(self, 'test_dialog') or not self.test_dialog.winfo_exists():
-                return
-            
-            texts = [
-                "Connecting to Google Gemini API",
-                "Connecting to Google Gemini API.",
-                "Connecting to Google Gemini API..",
-                "Connecting to Google Gemini API..."
-            ]
-            
-            if hasattr(self, 'loading_label') and self.loading_label.winfo_exists():
-                self.loading_label.configure(text=texts[step % 4])
-            
-            # Continue animation every 400ms
-            self.after(400, lambda: self._animate_loading_text(step + 1))
-        except:
-            pass
-    
-    def _rotate_spinner(self, step):
-        """Rotate spinner icon"""
-        try:
-            if not hasattr(self, 'test_dialog') or not self.test_dialog.winfo_exists():
-                return
-            
-            spinners = ["◜", "◝", "◞", "◟"]
-            
-            if hasattr(self, 'icon_label') and self.icon_label.winfo_exists():
-                self.icon_label.configure(text=spinners[step % 4])
-            
-            # Continue rotation every 150ms
-            self.after(150, lambda: self._rotate_spinner(step + 1))
-        except:
-            pass
-    
     def _finish_save(self, api_key):
         """Complete the save process after API key is validated"""
         # Everything is valid - save settings
         try:
             # Create AppData folder if it doesn't exist
-            app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
+            app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "ai-email-summarizer"
             app_data_path.mkdir(parents=True, exist_ok=True)
             
             # Save API key to .env
@@ -1620,7 +1597,7 @@ class EmailSummarizerApp(ctk.CTk):
         # Get current API key from AppData .env (priority), then fall back to config
         current_api_key = ""
         try:
-            app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
+            app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "ai-email-summarizer"
             env_file_path = app_data_path / ".env"
             if env_file_path.exists():
                 from dotenv import dotenv_values
@@ -1700,7 +1677,7 @@ class EmailSummarizerApp(ctk.CTk):
                 
                 # Priority 2: Check AppData location
                 if not cred_exists:
-                    app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
+                    app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "ai-email-summarizer"
                     if app_data_path.exists():
                         for file in app_data_path.glob('*.json'):
                             if file.is_file():
@@ -1719,7 +1696,7 @@ class EmailSummarizerApp(ctk.CTk):
                     cred_exists = os.path.exists(config_module.GMAIL_CREDENTIALS_FILE)
                 
                 # Check if API key exists
-                app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
+                app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "ai-email-summarizer"
                 env_file_path = app_data_path / ".env"
                 
                 env_vars = dotenv_values(env_file_path) if env_file_path.exists() else {}
@@ -1778,7 +1755,7 @@ class EmailSummarizerApp(ctk.CTk):
     def open_change_credentials(self):
         """Open the setup screen to change credentials and API key"""
         # Get current credentials to pre-fill the form
-        app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
+        app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "ai-email-summarizer"
         env_file_path = app_data_path / ".env"
         
         # Get current API key
@@ -1802,7 +1779,7 @@ class EmailSummarizerApp(ctk.CTk):
         if setup_screen.changes_made:
             # User saved changes - reload config
             try:
-                app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
+                app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "ai-email-summarizer"
                 env_file_path = app_data_path / ".env"
                 
                 from dotenv import load_dotenv
@@ -1861,7 +1838,7 @@ class EmailSummarizerApp(ctk.CTk):
         success = False
         try:
             # Resolve credentials path: prefer AppData (any valid OAuth JSON), then config, then local
-            app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
+            app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "ai-email-summarizer"
             cred_path = None
             
             # Try to find any valid OAuth credentials file in AppData
@@ -2115,7 +2092,7 @@ class EmailSummarizerApp(ctk.CTk):
         self.wait_window(setup_screen)
         
         # After setup, try to resolve credentials again
-        app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
+        app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "ai-email-summarizer"
         appdata_cred = app_data_path / "credentials.json"
         
         if appdata_cred.exists() or os.path.exists(config.GMAIL_CREDENTIALS_FILE) or os.path.exists('credentials.json'):
@@ -2131,7 +2108,7 @@ class EmailSummarizerApp(ctk.CTk):
                 "3. Enable Gmail API\n"
                 "4. Create OAuth 2.0 Desktop credentials\n"
                 "5. Download and save as 'credentials.json'\n"
-                "6. Place the file in %APPDATA%\\email-summarizer or this directory\n"
+                "6. Place the file in %APPDATA%\\ai-email-summarizer or this directory\n"
                 "7. Try login again\n\n"
                 "👉 See SETUP_GUIDE.md for detailed steps"
             )
@@ -2262,7 +2239,7 @@ class EmailSummarizerApp(ctk.CTk):
             # Priority: AppData/.env (most recent), then config module (fallback)
             current_api_key = ""
             try:
-                app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "email-summarizer"
+                app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "ai-email-summarizer"
                 env_file_path = app_data_path / ".env"
                 if env_file_path.exists():
                     from dotenv import dotenv_values

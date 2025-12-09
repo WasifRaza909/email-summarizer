@@ -135,6 +135,22 @@ docker run -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix email-summarizer
 2. Click on it from the results
 3. Click **"ENABLE"**
 
+### Important: Gmail API & OAuth scopes (required)
+
+Before the app can read or draft messages from a Gmail account, you must enable the Gmail API for the SAME Google Cloud project that contains your OAuth credentials. Also ensure the OAuth consent screen and test users are configured while you are developing or distributing the app.
+
+- Required scopes the app may request (add these when configuring your OAuth consent or when the app requests access):
+   - `https://www.googleapis.com/auth/gmail.readonly` — read messages
+   - `https://www.googleapis.com/auth/gmail.compose` — create and send draft messages
+   - `https://www.googleapis.com/auth/gmail.modify` — (optional) modify labels or mark messages as read
+
+- Notes for distribution (CodeCanyon / buyers):
+   - Make sure buyers understand they must enable the **Gmail API** in their own Google Cloud project and create OAuth credentials (desktop application) to use the app.
+   - If the OAuth consent screen is set to **External**, add any tester accounts to the **Test users** list while testing. For a public release you may need to submit the app for verification if you request sensitive scopes.
+   - The `credentials.json` you download from the Cloud Console must come from the same project where Gmail API was enabled.
+
+Test these steps locally by downloading `credentials.json` and using the app's Setup Screen to upload it, then click **Login** to authorize Gmail access.
+
 ### Step 3: Create OAuth 2.0 Credentials
 
 1. In the Cloud Console sidebar, go to **"Credentials"**
@@ -171,6 +187,51 @@ docker run -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix email-summarizer
 5. Keep it safe - you'll enter it in the app's setup screen
 
 ---
+
+## 📦 Packaging & Icons for Distribution (CodeCanyon)
+
+If you plan to sell or distribute this app on CodeCanyon, follow these recommendations to provide a professional, user-friendly package.
+
+- Recommended distribution: build a single Windows EXE with your icon embedded. This looks polished and avoids shipping a raw `credentials.json` or `.bat` file.
+
+- Build with PyInstaller (example):
+
+```powershell
+# Install PyInstaller if needed
+python -m pip install --user pyinstaller
+
+# From the project root (where app.py and icon.ico live)
+pyinstaller --onefile --windowed --name "AI Email Summarizer" --icon=icon.ico app.py
+```
+
+- After building:
+   - The output `dist\AI Email Summarizer.exe` is the distributable. Test it on a clean Windows machine.
+   - Include `icon.ico` in your source package so buyers can recompile if desired.
+
+- If you prefer to keep the launcher as a batch file:
+   - Distribute a ready-made shortcut (`.lnk`) that points to the `.bat` and uses `icon.ico` (or provide a PowerShell script to create the shortcut automatically).
+   - Or use a GUI tool like **Bat To Exe Converter** to convert the `.bat` to an EXE and embed the icon during conversion.
+
+- Icon guidance:
+   - Provide a multi-size `.ico` file containing 16×16, 32×32, 48×48, and 256×256 layers.
+   - Use a simple, high-contrast glyph so it remains legible at 16×16.
+   - Name it `icon.ico` and place it at the project root.
+
+- CodeCanyon packaging checklist (suggested files to include for buyers):
+   - `AI Email Summarizer.exe` (or `dist/` build files) — the runnable app
+   - `README.md` — installation and API setup instructions
+   - `LICENSE.txt` — licensing information
+   - `icon.ico` — icon file used for the build
+   - `credentials.example.json` — example OAuth JSON structure (do NOT include your real `credentials.json`)
+   - `setup_instructions.txt` — short one-page steps for buyers (create project, enable Gmail API, create OAuth credentials, get Gemini API key)
+
+- Distribution notes and legal/security reminders:
+   - Do NOT ship your personal `credentials.json` or any API keys. Buyers must create their own Google Cloud project and OAuth credentials.
+   - If you request sensitive scopes (Gmail write/modify), advise buyers that Google may require OAuth verification for public apps.
+   - Provide clear instructions in the purchase bundle explaining how to create the `credentials.json` and where to paste the Gemini API key.
+
+Test the packaged app thoroughly: login flow, email loading, summarization, and generating drafts. Verify the icon appears correctly in Explorer, on the taskbar, and in Start Menu shortcuts.
+
 
 ## ⚙️ Configuration
 
@@ -297,7 +358,7 @@ When you launch the app for the first time, the **Setup Screen** appears automat
 ## 📁 File Structure
 
 ```
-email-summarizer/
+Ai Email Summarizer/
 ├── email_customtkinter_gui.py    # Main application
 ├── config.py                      # Configuration (auto-generated)
 ├── requirements.txt               # Python dependencies
