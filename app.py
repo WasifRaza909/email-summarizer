@@ -1,32 +1,129 @@
-import customtkinter as ctk
-import tkinter as tk
-from tkinter import messagebox, filedialog
-import threading
-from concurrent.futures import ThreadPoolExecutor
+# ========== FAST SPLASH SCREEN (loads instantly with minimal imports) ==========
+import sys
 import os
-import pickle
-import json
-from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build
-import requests
-import base64
-import re
-from html.parser import HTMLParser
-from pathlib import Path
-import webbrowser
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+import tkinter as tk
+from tkinter import ttk
 
-# ========== IMPORT CENTRALIZED CONFIG ==========
-try:
-    import config
-    GEMINI_API_KEY = config.GEMINI_API_KEY
-    SCOPES = config.GMAIL_SCOPES
-    TOKEN_CACHE_FILE = config.GMAIL_TOKEN_CACHE
-    GEMINI_ENDPOINT = config.GEMINI_ENDPOINT
-except ImportError:
-    print("❌ Error: config.py not found. Please ensure config.py is in the same directory as this script.")
-    exit(1)
+# Fix for PyInstaller bundled app - set working directory early
+if getattr(sys, 'frozen', False):
+    os.chdir(os.path.dirname(sys.executable))
+
+def show_splash_and_load():
+    """Show splash screen while loading heavy modules"""
+    
+    # Create splash window
+    splash = tk.Tk()
+    splash.title("AI Email Summarizer Pro")
+    splash.overrideredirect(True)
+    
+    # Splash dimensions and centering
+    splash_width, splash_height = 450, 280
+    screen_width = splash.winfo_screenwidth()
+    screen_height = splash.winfo_screenheight()
+    x = (screen_width - splash_width) // 2
+    y = (screen_height - splash_height) // 2
+    splash.geometry(f"{splash_width}x{splash_height}+{x}+{y}")
+    splash.configure(bg="#1a1a2e")
+    
+    # Container with border
+    container = tk.Frame(splash, bg="#1a1a2e", highlightbackground="#8AB4F8", highlightthickness=2)
+    container.pack(fill="both", expand=True)
+    
+    # Logo
+    logo_label = tk.Label(container, text="📧", font=("Segoe UI Emoji", 48), bg="#1a1a2e", fg="#8AB4F8")
+    logo_label.pack(pady=(30, 10))
+    
+    # Title
+    title_label = tk.Label(container, text="AI Email Summarizer Pro", font=("Segoe UI", 20, "bold"), bg="#1a1a2e", fg="#FFFFFF")
+    title_label.pack(pady=(0, 5))
+    
+    # Subtitle
+    subtitle_label = tk.Label(container, text="Powered by Gemini AI", font=("Segoe UI", 10), bg="#1a1a2e", fg="#888888")
+    subtitle_label.pack(pady=(0, 20))
+    
+    # Status label
+    status_label = tk.Label(container, text="Starting up...", font=("Segoe UI", 11), bg="#1a1a2e", fg="#8AB4F8")
+    status_label.pack(pady=(0, 10))
+    
+    # Progress bar style
+    style = ttk.Style()
+    style.theme_use('clam')
+    style.configure("Custom.Horizontal.TProgressbar", troughcolor='#2d2d44', background='#8AB4F8',
+                    darkcolor='#8AB4F8', lightcolor='#8AB4F8', bordercolor='#1a1a2e', thickness=8)
+    
+    progress = ttk.Progressbar(container, style="Custom.Horizontal.TProgressbar", orient="horizontal", length=350, mode="determinate")
+    progress.pack(pady=(0, 20))
+    
+    splash.lift()
+    splash.attributes('-topmost', True)
+    splash.update()
+    
+    def update_splash(msg, val):
+        status_label.config(text=msg)
+        progress['value'] = val
+        splash.update()
+    
+    # Load modules with progress updates
+    global ctk, messagebox, filedialog, threading, ThreadPoolExecutor
+    global pickle, json, InstalledAppFlow, build, requests, base64, re
+    global HTMLParser, Path, webbrowser, HTTPServer, BaseHTTPRequestHandler
+    global urlparse, parse_qs, config, GEMINI_API_KEY, SCOPES, TOKEN_CACHE_FILE, GEMINI_ENDPOINT
+    
+    update_splash("Loading UI framework...", 15)
+    import customtkinter as ctk
+    from tkinter import messagebox, filedialog
+    
+    update_splash("Loading threading...", 25)
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+    
+    update_splash("Loading utilities...", 35)
+    import pickle
+    import json
+    import base64
+    import re
+    from html.parser import HTMLParser
+    from pathlib import Path
+    import webbrowser
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+    from urllib.parse import urlparse, parse_qs
+    
+    update_splash("Loading Google authentication...", 50)
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    
+    update_splash("Loading Google APIs...", 70)
+    from googleapiclient.discovery import build
+    
+    update_splash("Loading network libraries...", 85)
+    import requests
+    
+    update_splash("Loading configuration...", 95)
+    try:
+        import config
+        GEMINI_API_KEY = config.GEMINI_API_KEY
+        SCOPES = config.GMAIL_SCOPES
+        TOKEN_CACHE_FILE = config.GMAIL_TOKEN_CACHE
+        GEMINI_ENDPOINT = config.GEMINI_ENDPOINT
+    except ImportError:
+        splash.destroy()
+        error_root = tk.Tk()
+        error_root.withdraw()
+        tk.messagebox.showerror("Error", "config.py not found. Please ensure config.py is in the same directory.")
+        sys.exit(1)
+    
+    update_splash("Ready!", 100)
+    splash.update()
+    splash.after(300, splash.destroy)  # Brief pause to show 100%
+    
+    # Process remaining events
+    try:
+        while splash.winfo_exists():
+            splash.update()
+    except tk.TclError:
+        pass  # Window was destroyed, which is expected
+
+# Show splash and load modules
+show_splash_and_load()
 
 # ========== MARKDOWN PARSER FOR TEXT DISPLAY ==========
 class MarkdownTextWidget(ctk.CTkTextbox):

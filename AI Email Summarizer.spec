@@ -10,9 +10,23 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        # Exclude unnecessary testing and development modules
+        'pytest', 'unittest', 'test', 'tests',
+        # Exclude unused scientific computing libraries
+        'numpy', 'pandas', 'scipy', 'matplotlib',
+        # Exclude other unused modules
+        'IPython', 'jupyter', 'notebook',
+        'PIL', 'cv2', 'opencv',
+        'sqlalchemy', 'sqlite3',
+        'xml.etree.ElementTree',
+        'logging.handlers',
+        'multiprocessing',
+        # Exclude unused email modules
+        'email.mime.audio', 'email.mime.image',
+    ],
     noarchive=False,
-    optimize=0,
+    optimize=2,
 )
 pyz = PYZ(a.pure, a.zipped_data, cipher=None)
 
