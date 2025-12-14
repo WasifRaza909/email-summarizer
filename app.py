@@ -37,6 +37,13 @@ class MarkdownTextWidget(ctk.CTkTextbox):
         # Get access to the underlying tkinter textbox
         self._text_widget = self._textbox
         
+        # Store links for click handling
+        self.links_map = {}  # Maps tag_name -> URL
+        
+        # Bind mouse events for link clicking
+        self._text_widget.bind("<Button-1>", self._on_click)
+        self._text_widget.bind("<Motion>", self._on_motion)
+        
         # Use standard fonts for styling with increased font sizes
         base_font = ("Segoe UI", 12)
         bold_font = ("Segoe UI", 12, "bold")
@@ -60,11 +67,20 @@ class MarkdownTextWidget(ctk.CTkTextbox):
                                      foreground="#FFD700",
                                     )
         
-        # Code - monospace font with background
+        # Code - monospace font with NO background
         self._text_widget.tag_config("code", 
                                      font=code_font,
-                                     foreground="#C2185B",
-                                     background="#F5F5F5")
+                                     foreground="#C2185B")
+        
+        # Links - just different color, no background, hand cursor, underline
+        self._text_widget.tag_config("link", 
+                                     foreground="#64B5F6",
+                                     underline=True)
+        
+        # Gmail link - green color with underline and cursor
+        self._text_widget.tag_config("gmail_link", 
+                                     foreground="#81C995",
+                                     underline=True)
         
         # Headings - bold + blue color with increased size
         self._text_widget.tag_config("heading1", 
@@ -112,31 +128,123 @@ class MarkdownTextWidget(ctk.CTkTextbox):
             self._text_widget.insert("end", '\n')
     
     def _insert_with_formatting(self, index, text):
-        """Insert text with inline markdown formatting (***bold italic***, **bold**, *italic*, `code`)"""
-        # Pattern to match: ***bold italic***, **bold**, *italic*, `code`
+        """Insert text with inline markdown formatting and URL detection"""
+        # Pattern to match: ***bold italic***, **bold**, *italic*, `code`, and URLs
         # Order matters: check longer patterns first
-        pattern = r'(\*\*\*([^*]+)\*\*\*)|(\*\*([^*]+)\*\*)|(\*([^*]+)\*)|(`([^`]+)`)'
+        markdown_pattern = r'(\*\*\*([^*]+)\*\*\*)|(\*\*([^*]+)\*\*)|(\*([^*]+)\*)|(`([^`]+)`)'
+        url_pattern = r'(https?://[^\s\)]+)'
+        gmail_link_pattern = r'(https://mail\.google\.com/mail/[^\s\)]+)'
         
+        # Combine patterns - check markdown first, then URLs in remaining text
         last_end = 0
-        for match in re.finditer(pattern, text):
+        
+        # First, find all markdown matches
+        markdown_matches = list(re.finditer(markdown_pattern, text))
+        gmail_matches = list(re.finditer(gmail_link_pattern, text))
+        url_matches = list(re.finditer(url_pattern, text))
+        
+        # Combine and sort all matches by start position
+        all_matches = []
+        for match in markdown_matches:
+            all_matches.append(('markdown', match))
+        
+        # Add Gmail links first (they take priority)
+        for match in gmail_matches:
+            # Only add if it's not inside a markdown match
+            is_inside_markdown = False
+            for md_match in markdown_matches:
+                if match.start() >= md_match.start() and match.end() <= md_match.end():
+                    is_inside_markdown = True
+                    break
+            if not is_inside_markdown:
+                all_matches.append(('gmail_link', match))
+        
+        # Then add regular URLs
+        for match in url_matches:
+            # Only add URL if it's not inside a markdown match or gmail link
+            is_inside_markdown = False
+            for md_match in markdown_matches:
+                if match.start() >= md_match.start() and match.end() <= md_match.end():
+                    is_inside_markdown = True
+                    break
+            
+            is_gmail_link = False
+            for gmail_match in gmail_matches:
+                if match.start() >= gmail_match.start() and match.end() <= gmail_match.end():
+                    is_gmail_link = True
+                    break
+            
+            if not is_inside_markdown and not is_gmail_link:
+                all_matches.append(('url', match))
+        
+        # Sort by start position
+        all_matches.sort(key=lambda x: x[1].start())
+        
+        for match_type, match in all_matches:
             # Insert text before match with base font
             if match.start() > last_end:
                 self._text_widget.insert(index, text[last_end:match.start()], 'base')
             
-            if match.group(2):  # ***bold italic***
-                self._text_widget.insert(index, match.group(2), 'bold_italic')
-            elif match.group(4):  # **bold**
-                self._text_widget.insert(index, match.group(4), 'bold')
-            elif match.group(6):  # *italic*
-                self._text_widget.insert(index, match.group(6), 'italic')
-            elif match.group(8):  # `code`
-                self._text_widget.insert(index, match.group(8), 'code')
+            if match_type == 'markdown':
+                if match.group(2):  # ***bold italic***
+                    self._text_widget.insert(index, match.group(2), 'bold_italic')
+                elif match.group(4):  # **bold**
+                    self._text_widget.insert(index, match.group(4), 'bold')
+                elif match.group(6):  # *italic*
+                    self._text_widget.insert(index, match.group(6), 'italic')
+                elif match.group(8):  # `code`
+                    self._text_widget.insert(index, match.group(8), 'code')
+            elif match_type == 'gmail_link':
+                # Style Gmail links with special formatting
+                self._text_widget.insert(index, match.group(0), 'gmail_link')
+            elif match_type == 'url':
+                # Style URLs with link tag (no background, just color)
+                self._text_widget.insert(index, match.group(0), 'link')
             
             last_end = match.end()
         
         # Insert remaining text with base font
         if last_end < len(text):
             self._text_widget.insert(index, text[last_end:], 'base')
+    
+    def _on_motion(self, event):
+        """Change cursor when hovering over links"""
+        tags = self._text_widget.tag_names(f"@{event.x},{event.y}")
+        if 'link' in tags or 'gmail_link' in tags:
+            self._text_widget.config(cursor="hand2")
+        else:
+            self._text_widget.config(cursor="")
+    
+    def _on_click(self, event):
+        """Handle link clicks"""
+        tags = self._text_widget.tag_names(f"@{event.x},{event.y}")
+        
+        # Check if clicked on a link
+        for tag in tags:
+            if tag in self.links_map:
+                url = self.links_map[tag]
+                webbrowser.open(url)
+                return
+        
+        # Check if it's a regular link or gmail link tag that we can extract the URL from
+        if 'link' in tags or 'gmail_link' in tags:
+            # Extract the URL from the text at this position
+            try:
+                # Get the range of the link tag
+                tag_name = 'link' if 'link' in tags else 'gmail_link'
+                ranges = self._text_widget.tag_ranges(tag_name)
+                
+                # Find which range contains our click position
+                text_index = self._text_widget.index(f"@{event.x},{event.y}")
+                
+                for i in range(0, len(ranges), 2):
+                    if self._text_widget.compare(ranges[i], "<=", text_index) and \
+                       self._text_widget.compare(text_index, "<", ranges[i+1]):
+                        url = self._text_widget.get(ranges[i], ranges[i+1])
+                        webbrowser.open(url)
+                        return
+            except:
+                pass
 
 # Colors - Modern Professional Palette (Dark Theme Only)
 COLOR_PRIMARY = "#8AB4F8"
@@ -199,6 +307,22 @@ class MLStripper(HTMLParser):
         self.strict = False
         self.convert_charrefs = True
         self.text = []
+        self.current_link = None
+
+    def handle_starttag(self, tag, attrs):
+        # Extract href from anchor tags and store it
+        if tag == 'a':
+            for attr, value in attrs:
+                if attr == 'href':
+                    self.current_link = value
+                    break
+
+    def handle_endtag(self, tag):
+        # When anchor tag ends, append the link if we have one
+        if tag == 'a' and self.current_link:
+            # Add the URL in parentheses after the link text
+            self.text.append(f' ({self.current_link})')
+            self.current_link = None
 
     def handle_data(self, d):
         self.text.append(d)
@@ -226,56 +350,115 @@ def get_email_subject(service, message_id):
         return "Error", str(e)
 
 def get_email_body_raw(service, message_id):
-    """Get the full email body/content"""
+    """Get the full email body/content with links extracted"""
     try:
         message = service.users().messages().get(userId='me', id=message_id, format='full').execute()
         
-        # Try to get text part first, then html
+        def parse_parts(parts):
+            """Recursively parse email parts to find text and HTML content"""
+            text_body = ""
+            html_body = ""
+            
+            for part in parts:
+                mime_type = part.get('mimeType', '')
+                
+                # Check for nested parts (multipart)
+                if 'parts' in part:
+                    nested_text, nested_html = parse_parts(part['parts'])
+                    if nested_text and not text_body:
+                        text_body = nested_text
+                    if nested_html and not html_body:
+                        html_body = nested_html
+                
+                # Text content
+                elif mime_type == 'text/plain':
+                    data = part.get('body', {}).get('data', '')
+                    if data:
+                        text_body = base64.urlsafe_b64decode(data).decode('utf-8')
+                
+                # HTML content
+                elif mime_type == 'text/html':
+                    data = part.get('body', {}).get('data', '')
+                    if data:
+                        html_body = base64.urlsafe_b64decode(data).decode('utf-8')
+            
+            return text_body, html_body
+        
+        # Parse the email parts
         parts = message.get('payload', {}).get('parts', [])
         body = ""
         
-        for part in parts:
-            if part['mimeType'] == 'text/plain':
-                data = part.get('body', {}).get('data', '')
-                if data:
-                    body = base64.urlsafe_b64decode(data).decode('utf-8')
-                    break
-            elif part['mimeType'] == 'text/html':
-                data = part.get('body', {}).get('data', '')
-                if data:
-                    html_content = base64.urlsafe_b64decode(data).decode('utf-8')
-                    body = strip_html_tags(html_content)
+        if parts:
+            text_body, html_body = parse_parts(parts)
+            # Prefer HTML to extract links, fallback to text
+            if html_body:
+                body = strip_html_tags(html_body)
+            elif text_body:
+                body = text_body
         
         # Fallback: try to get body from payload directly
         if not body:
             payload = message.get('payload', {})
+            mime_type = payload.get('mimeType', '')
             data = payload.get('body', {}).get('data', '')
+            
             if data:
-                body = base64.urlsafe_b64decode(data).decode('utf-8')
+                decoded = base64.urlsafe_b64decode(data).decode('utf-8')
+                if mime_type == 'text/html':
+                    body = strip_html_tags(decoded)
+                else:
+                    body = decoded
         
-        return body[:2000] if body else ""
+        # Increase limit to 5000 to capture links at the end
+        return body[:5000] if body else ""
     except Exception as e:
         return f"Error reading email: {str(e)}"
 
-def gemini_summarize_and_reply(body):
+def gemini_summarize_and_reply(body, message_id=None):
     try:
         if not body.strip():
             return "No email content to summarize."
         
-        prompt = f"""You are an AI assistant.
-    Please:
-    1. Summarize the following email in concise bullet points using markdown formatting.
-    2. Draft a professional reply email based on the summary.
+        # Add Gmail link at the top if message_id is provided
+        gmail_link = ""
+        if message_id:
+            gmail_link = f"**📧 Open in Gmail:** https://mail.google.com/mail/u/0/#inbox/{message_id}\n\n"
+        
+        prompt = f"""You are an AI email assistant. Analyze the following email and provide a response.
 
-    Formatting requirements:
-    - Use **bold** for important points and for section headings (e.g. **SUMMARY**, **DRAFT REPLY**).
-    - Use * for bullet lists.
-    - Use inline Markdown bold (`**...**`) for the section headers rather than markdown heading markers like `##`.
-    - Format your response for readability and clarity.
+Your response MUST include the following sections:
 
-    Email:
-    {body}
-    """
+1. **SUMMARY** section:
+   - List only the most important points (3-5 bullet points max)
+   - Use * for bullet points
+   - Be brief and focused on key information only
+
+2. **RELEVANT LINKS** section (if there are any URLs/links in the email):
+   - Include a sub-heading: **Relevant Links**
+   - For each link, provide a descriptive title followed by the URL
+   - Format each link as: * [Link Description]: https://example.com
+   - The URL must start with http:// or https://
+   - Include a brief title that explains what the link is relevant to
+   - If no links found, skip this section entirely
+
+3. **DRAFT REPLY** section:
+   - Write a complete, ready-to-send professional email reply
+   - Include proper greeting and closing
+   - Address all important points from the original email
+   - Make it natural and conversational but professional
+   - This should be a full email, not a summary
+
+Formatting rules:
+- Use **SUMMARY**, **RELEVANT LINKS**, and **DRAFT REPLY** as section headers (bold inline, like **HEADER**)
+- For summary and links, use * for bullet lists
+- For links, format as: * [Title]: https://url
+- For draft reply, write as a complete email without bullet points
+- IMPORTANT: Format links as plain URLs starting with http:// or https:// so they are recognized as clickable
+- Make sure all sections are complete
+
+Email to analyze:
+{body}
+"""
         
         # Get API key from AppData/.env (priority) or config module (fallback)
         api_key = ""
@@ -309,8 +492,8 @@ def gemini_summarize_and_reply(body):
                 }
             ],
             "generationConfig": {
-                "temperature": 0.2,
-                "maxOutputTokens": 2048
+                "temperature": 0.3,
+                "maxOutputTokens": 4096
             }
         }
         
@@ -321,12 +504,16 @@ def gemini_summarize_and_reply(body):
         if 'candidates' in resp_json and resp_json['candidates']:
             try:
                 candidate = resp_json['candidates'][0]
+                ai_response = ""
                 if 'content' in candidate and 'parts' in candidate['content']:
-                    return candidate['content']['parts'][0]['text']
+                    ai_response = candidate['content']['parts'][0]['text']
                 elif 'content' in candidate and 'text' in candidate['content']:
-                    return candidate['content']['text']
+                    ai_response = candidate['content']['text']
                 else:
                     return f"Unexpected response structure"
+                
+                # Prepend Gmail link to the response
+                return gmail_link + ai_response
             except (KeyError, IndexError, TypeError) as e:
                 return f"Error extracting text: {str(e)}"
         elif 'error' in resp_json:
@@ -2388,7 +2575,7 @@ class EmailSummarizerApp(ctk.CTk):
                     data = self.email_data.get(msg_id)
                     
                     if data and data['summary'] is None:
-                        summary = gemini_summarize_and_reply(data['body'])
+                        summary = gemini_summarize_and_reply(data['body'], msg_id)
                         self.email_data[msg_id]['summary'] = summary
                     
                     # Update progress
@@ -2422,7 +2609,7 @@ class EmailSummarizerApp(ctk.CTk):
 
     def _generate_summary(self, email_id, body):
         try:
-            summary = gemini_summarize_and_reply(body)
+            summary = gemini_summarize_and_reply(body, email_id)
             self.email_data[email_id]['summary'] = summary
             
             # Update UI if still selected
