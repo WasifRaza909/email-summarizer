@@ -361,16 +361,16 @@ class EmailListItem(ctk.CTkFrame):
         content.bind("<Button-1>", self._on_click)
         
         # Subject - Material Design typography
-        subject_text = subject[:55] + "..." if len(subject) > 55 else subject
+        subject_text = subject[:50] + "..." if len(subject) > 50 else subject
         subject_label = ctk.CTkLabel(
             content,
             text=subject_text,
             font=("Segoe UI", FONT_MD, "bold"),
             text_color=COLOR_PRIMARY,
-            justify="left",
+            anchor="w",
             cursor="hand2"
         )
-        subject_label.pack(anchor="w", pady=(0, 6))
+        subject_label.pack(anchor="w", pady=(0, 6), fill="x")
         subject_label.bind("<Button-1>", self._on_click)
         
         # Sender - Secondary text color with proper contrast
@@ -380,10 +380,10 @@ class EmailListItem(ctk.CTkFrame):
             text=sender_text,
             font=("Segoe UI", FONT_XS),
             text_color=COLOR_TEXT_SECONDARY,
-            justify="left",
+            anchor="w",
             cursor="hand2"
         )
-        sender_label.pack(anchor="w")
+        sender_label.pack(anchor="w", fill="x")
         sender_label.bind("<Button-1>", self._on_click)
         
         self.subject_label_ref = subject_label
@@ -1527,10 +1527,10 @@ class EmailSummarizerApp(ctk.CTk):
             text="No email selected",
             font=("Segoe UI", FONT_LG),
             text_color=COLOR_PRIMARY,
-            wraplength=500,
-            justify="left"
+            justify="left",
+            anchor="w"
         )
-        self.subject_label.pack(anchor="w", pady=(0, 2), padx=10)
+        self.subject_label.pack(anchor="w", pady=(0, 2), padx=10, fill="x")
         
         from_title = ctk.CTkLabel(
             info_frame,
@@ -1545,10 +1545,10 @@ class EmailSummarizerApp(ctk.CTk):
             text="No email selected",
             font=("Segoe UI", FONT_LG),
             text_color=COLOR_PRIMARY,
-            wraplength=500,
-            justify="left"
+            justify="left",
+            anchor="w"
         )
-        self.from_label.pack(anchor="w", padx=10)
+        self.from_label.pack(anchor="w", padx=10, fill="x")
         
         divider = ctk.CTkFrame(right_panel, fg_color=COLOR_BORDER, height=1)
         divider.pack(fill="x", padx=16, pady=10)
