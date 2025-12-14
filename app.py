@@ -75,9 +75,9 @@ class MarkdownTextWidget(ctk.CTkTextbox):
                                      font=heading_font,
                                      foreground="#1A73E8")
         
-        # List items - default
+        # List items - bright color for visibility on dark background
         self._text_widget.tag_config("list_item", 
-                                     foreground="#202124")
+                                     foreground="#FFD700")
     
     def insert_markdown(self, index, text):
         """Insert markdown text and parse formatting"""
