@@ -1517,6 +1517,10 @@ ctk.set_appearance_mode("dark")
 class EmailSummarizerApp(ctk.CTk):
     def __init__(self):
         super().__init__()
+        
+        # Create and set icon BEFORE anything else
+        self._create_and_set_icon()
+        
         self.title("AI Email Summarizer Pro")
         self.minsize(1100, 650)
         self.resizable(True, True)
@@ -1574,6 +1578,103 @@ class EmailSummarizerApp(ctk.CTk):
         self.destroy()
         import sys
         sys.exit(0)
+    
+    def _create_and_set_icon(self):
+        """Create and set email emoji icon for title bar and taskbar (same as splash screen)"""
+        try:
+            import os
+            import sys
+            from PIL import Image, ImageDraw
+            
+            # Create app data directory
+            app_data_dir = os.path.join(os.path.expanduser('~'), '.ai_email_summarizer')
+            os.makedirs(app_data_dir, exist_ok=True)
+            icon_path = os.path.join(app_data_dir, 'app_icon.ico')
+            
+            # Create icon at ultra-high resolution for maximum sharpness
+            base_size = 1024
+            img = Image.new('RGBA', (base_size, base_size), (26, 26, 46, 255))  # Dark background like splash
+            draw = ImageDraw.Draw(img, 'RGBA')
+            
+            # Draw email icon (envelope) matching the splash screen style
+            icon_color = (138, 180, 248, 255)  # Light blue #8AB4F8
+            line_width = 48  # Proportional to ultra-high resolution canvas
+            
+            # Envelope dimensions with better proportions
+            margin = int(base_size * 0.15)
+            env_left = margin
+            env_top = margin + int(base_size * 0.08)
+            env_right = base_size - margin
+            env_bottom = base_size - margin
+            
+            # Draw envelope rectangle with smooth corners
+            draw.rectangle(
+                [env_left, env_top, env_right, env_bottom],
+                outline=icon_color,
+                width=line_width
+            )
+            
+            # Draw envelope flap (triangle)
+            center_x = base_size // 2
+            center_y = base_size // 2 + int(base_size * 0.06)
+            draw.line([env_left, env_top, center_x, center_y], fill=icon_color, width=line_width)
+            draw.line([env_right, env_top, center_x, center_y], fill=icon_color, width=line_width)
+            
+            # Optional: Add a small circle in the center for visual appeal
+            circle_radius = int(base_size * 0.08)
+            draw.ellipse(
+                [center_x - circle_radius, center_y - circle_radius,
+                 center_x + circle_radius, center_y + circle_radius],
+                outline=icon_color,
+                width=int(line_width * 0.6)
+            )
+            
+            # Save icon with multiple sizes for Windows (using high-quality downsampling)
+            icon_sizes = [(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
+            img.save(icon_path, format='ICO', sizes=icon_sizes, quality=95)
+            
+            # Set icon for window title bar
+            if os.path.exists(icon_path):
+                self.iconbitmap(default=icon_path)
+                
+                # Set taskbar icon for Windows using ctypes
+                if sys.platform == 'win32':
+                    try:
+                        import ctypes
+                        
+                        # Set AppUserModelID to separate from Python
+                        myappid = 'ai.email.summarizer.pro.1.0'
+                        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+                        
+                        # Get window handle after update_idletasks
+                        self.update_idletasks()
+                        hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
+                        
+                        # Set both small and large icons
+                        ICON_SMALL = 0
+                        ICON_BIG = 1
+                        WM_SETICON = 0x0080
+                        
+                        hicon = ctypes.windll.user32.LoadImageW(
+                            0,
+                            icon_path,
+                            1,  # IMAGE_ICON
+                            0, 0,
+                            0x00000010 | 0x00008000  # LR_LOADFROMFILE | LR_DEFAULTSIZE
+                        )
+                        
+                        if hicon:
+                            ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, hicon)
+                            ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, hicon)
+                            
+                    except Exception as e:
+                        pass  # Silently fail if Windows API calls don't work
+                        
+        except ImportError:
+            pass
+        except Exception as e:
+            pass
+    
     
     def create_widgets(self):
         # ===== HEADER =====
