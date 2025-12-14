@@ -2270,15 +2270,15 @@ class EmailSummarizerApp(ctk.CTk):
             results = self.service.users().messages().list(
                 userId='me',
                 labelIds=['INBOX'],
-                q="is:unread",
+                q="category:primary",
                 maxResults=self.max_emails
             ).execute()
             
             self.emails = results.get('messages', [])
             
             if not self.emails:
-                self.progress_label.configure(text="✓ No unread emails found")
-                messagebox.showinfo("Info", "No unread emails found")
+                self.progress_label.configure(text="✓ No emails found in Primary")
+                messagebox.showinfo("Info", "No emails found in Primary inbox")
                 self.load_btn.configure(state="normal")
                 return
             
