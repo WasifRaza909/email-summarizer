@@ -1593,41 +1593,32 @@ class EmailSummarizerApp(ctk.CTk):
             
             # Create icon at ultra-high resolution for maximum sharpness
             base_size = 1024
-            img = Image.new('RGBA', (base_size, base_size), (26, 26, 46, 255))  # Dark background like splash
+            
+            # Create with dark background matching splash screen (#1a1a2e)
+            img = Image.new('RGBA', (base_size, base_size), (26, 26, 46, 255))
             draw = ImageDraw.Draw(img, 'RGBA')
             
-            # Draw email icon (envelope) matching the splash screen style
-            icon_color = (138, 180, 248, 255)  # Light blue #8AB4F8
-            line_width = 48  # Proportional to ultra-high resolution canvas
+            # Draw clean blue outline envelope matching splash screen style
+            icon_color = (138, 180, 248, 255)  # Light blue #8AB4F8 - same as splash screen
+            line_width = 52  # Thick outline for visibility at small sizes
             
-            # Envelope dimensions with better proportions
-            margin = int(base_size * 0.15)
+            # Envelope dimensions - nice proportions
+            margin = int(base_size * 0.18)
             env_left = margin
-            env_top = margin + int(base_size * 0.08)
+            env_top = int(base_size * 0.32)
             env_right = base_size - margin
-            env_bottom = base_size - margin
+            env_bottom = int(base_size * 0.68)
             
-            # Draw envelope rectangle with smooth corners
-            draw.rectangle(
-                [env_left, env_top, env_right, env_bottom],
-                outline=icon_color,
-                width=line_width
-            )
+            # Draw envelope rectangle (outline only)
+            draw.rectangle([env_left, env_top, env_right, env_bottom], 
+                         outline=icon_color, width=line_width)
             
-            # Draw envelope flap (triangle)
+            # Draw envelope flap - two diagonal lines forming a V shape
             center_x = base_size // 2
-            center_y = base_size // 2 + int(base_size * 0.06)
+            center_y = (env_top + env_bottom) // 2
+            
             draw.line([env_left, env_top, center_x, center_y], fill=icon_color, width=line_width)
             draw.line([env_right, env_top, center_x, center_y], fill=icon_color, width=line_width)
-            
-            # Optional: Add a small circle in the center for visual appeal
-            circle_radius = int(base_size * 0.08)
-            draw.ellipse(
-                [center_x - circle_radius, center_y - circle_radius,
-                 center_x + circle_radius, center_y + circle_radius],
-                outline=icon_color,
-                width=int(line_width * 0.6)
-            )
             
             # Save icon with multiple sizes for Windows (using high-quality downsampling)
             icon_sizes = [(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
