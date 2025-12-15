@@ -1,27 +1,22 @@
-"""
-AI Email Summarizer Pro - Main Application
-Summarizes Gmail emails using Google Gemini AI and provides draft replies.
-Features include OAuth authentication, parallel email processing, and markdown rendering.
-"""
-
+# ========== FAST SPLASH SCREEN (loads instantly with minimal imports) ==========
 import sys
 import os
 import tkinter as tk
 from tkinter import ttk
 
+# Fix for PyInstaller bundled app - set working directory early
 if getattr(sys, 'frozen', False):
     os.chdir(os.path.dirname(sys.executable))
 
 def show_splash_and_load():
-    """
-    Display splash screen while loading heavy modules in the background.
-    Improves perceived startup time by showing UI immediately.
-    """
+    """Show splash screen while loading heavy modules"""
     
+    # Create splash window
     splash = tk.Tk()
     splash.title("AI Email Summarizer Pro")
     splash.overrideredirect(True)
     
+    # Splash dimensions and centering
     splash_width, splash_height = 450, 280
     screen_width = splash.winfo_screenwidth()
     screen_height = splash.winfo_screenheight()
@@ -30,21 +25,27 @@ def show_splash_and_load():
     splash.geometry(f"{splash_width}x{splash_height}+{x}+{y}")
     splash.configure(bg="#1a1a2e")
     
+    # Container with border
     container = tk.Frame(splash, bg="#1a1a2e", highlightbackground="#8AB4F8", highlightthickness=2)
     container.pack(fill="both", expand=True)
     
+    # Logo
     logo_label = tk.Label(container, text="📧", font=("Segoe UI Emoji", 48), bg="#1a1a2e", fg="#8AB4F8")
     logo_label.pack(pady=(30, 10))
     
+    # Title
     title_label = tk.Label(container, text="AI Email Summarizer Pro", font=("Segoe UI", 20, "bold"), bg="#1a1a2e", fg="#FFFFFF")
     title_label.pack(pady=(0, 5))
     
+    # Subtitle
     subtitle_label = tk.Label(container, text="Powered by Gemini AI", font=("Segoe UI", 10), bg="#1a1a2e", fg="#888888")
     subtitle_label.pack(pady=(0, 20))
     
+    # Status label
     status_label = tk.Label(container, text="Starting up...", font=("Segoe UI", 11), bg="#1a1a2e", fg="#8AB4F8")
     status_label.pack(pady=(0, 10))
     
+    # Progress bar style
     style = ttk.Style()
     style.theme_use('clam')
     style.configure("Custom.Horizontal.TProgressbar", troughcolor='#2d2d44', background='#8AB4F8',
@@ -62,6 +63,7 @@ def show_splash_and_load():
         progress['value'] = val
         splash.update()
     
+    # Load modules with progress updates
     global ctk, messagebox, filedialog, threading, ThreadPoolExecutor
     global pickle, json, InstalledAppFlow, build, requests, base64, re
     global HTMLParser, Path, webbrowser, HTTPServer, BaseHTTPRequestHandler
@@ -114,20 +116,20 @@ def show_splash_and_load():
     splash.after(300, splash.destroy)  # Brief pause to show 100%
     
     # Process remaining events
-    
     try:
         while splash.winfo_exists():
             splash.update()
     except tk.TclError:
-        pass
+        pass  # Window was destroyed, which is expected
 
+# Show splash and load modules
 show_splash_and_load()
 
+# ========== MARKDOWN PARSER FOR TEXT DISPLAY ==========
 class MarkdownTextWidget(ctk.CTkTextbox):
-    """
-    Enhanced text widget that renders markdown formatting with styled text.
-    Supports bold, italic, code, headings, lists, and clickable links.
+    """Enhanced text widget that renders markdown formatting with actual text styles"""
     
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Get access to the underlying tkinter textbox
         self._text_widget = self._textbox
@@ -147,8 +149,11 @@ class MarkdownTextWidget(ctk.CTkTextbox):
         code_font = ("Courier New", 11)
         heading_font = ("Segoe UI", 14, "bold")
         
+        # Configure tags for markdown rendering with ACTUAL STYLES
+        # Base text with larger font
         self._text_widget.tag_config("base", font=base_font)
         
+        # Bold with color highlight (yellow/gold background)
         self._text_widget.tag_config("bold", 
                                      font=bold_font,
                                      foreground="#FFD700",
@@ -159,18 +164,22 @@ class MarkdownTextWidget(ctk.CTkTextbox):
                                      foreground="#FFD700",
                                     )
         
+        # Code - monospace font with NO background
         self._text_widget.tag_config("code", 
                                      font=code_font,
                                      foreground="#C2185B")
         
+        # Links - just different color, no background, hand cursor, underline
         self._text_widget.tag_config("link", 
                                      foreground="#64B5F6",
                                      underline=True)
         
+        # Gmail link - green color with underline and cursor
         self._text_widget.tag_config("gmail_link", 
                                      foreground="#81C995",
                                      underline=True)
         
+        # Headings - bold + blue color with increased size
         self._text_widget.tag_config("heading1", 
                                      font=heading_font,
                                      foreground="#1A73E8")
@@ -179,24 +188,21 @@ class MarkdownTextWidget(ctk.CTkTextbox):
                                      font=heading_font,
                                      foreground="#1A73E8")
         
+        # List items - bright color for visibility on dark background
         self._text_widget.tag_config("list_item", 
                                      foreground="#FFD700")
     
     def insert_markdown(self, index, text):
-        """
-        Parse and insert markdown-formatted text with visual styling.
-        
-        Args:
-            index: Text widget index where to insert
-            text: Markdown-formatted text string
-        """
+        """Insert markdown text and parse formatting"""
         lines = text.split('\n')
         
         for line in lines:
             if not line.strip():
+                # Empty line
                 self._text_widget.insert("end", '\n')
                 continue
             
+            # Check for headings
             heading_match = re.match(r'^(#{1,6})\s+(.+)$', line)
             if heading_match:
                 level = len(heading_match.group(1))
@@ -207,6 +213,7 @@ class MarkdownTextWidget(ctk.CTkTextbox):
             
             # Check for list items (- or * or •)
             list_match = re.match(r'^[\s]*([-*•])\s+(.+)$', line)
+            if list_match:
                 content = list_match.group(2)
                 self._text_widget.insert("end", '  • ', 'list_item')
                 self._insert_with_formatting("end", content)
@@ -218,25 +225,29 @@ class MarkdownTextWidget(ctk.CTkTextbox):
             self._text_widget.insert("end", '\n')
     
     def _insert_with_formatting(self, index, text):
-        """
-        Insert text with inline markdown formatting and URL detection.
-        Handles bold, italic, code blocks, and clickable links.
-        """\*\*([^*]+)\*\*)|(\*([^*]+)\*)|(`([^`]+)`)'
+        """Insert text with inline markdown formatting and URL detection"""
+        # Pattern to match: ***bold italic***, **bold**, *italic*, `code`, and URLs
+        # Order matters: check longer patterns first
+        markdown_pattern = r'(\*\*\*([^*]+)\*\*\*)|(\*\*([^*]+)\*\*)|(\*([^*]+)\*)|(`([^`]+)`)'
         url_pattern = r'(https?://[^\s\)]+)'
         gmail_link_pattern = r'(https://mail\.google\.com/mail/[^\s\)]+)'
         
+        # Combine patterns - check markdown first, then URLs in remaining text
         last_end = 0
         
+        # First, find all markdown matches
         markdown_matches = list(re.finditer(markdown_pattern, text))
         gmail_matches = list(re.finditer(gmail_link_pattern, text))
         url_matches = list(re.finditer(url_pattern, text))
         
         # Combine and sort all matches by start position
         all_matches = []
-        all_matches = []
         for match in markdown_matches:
             all_matches.append(('markdown', match))
-         match
+        
+        # Add Gmail links first (they take priority)
+        for match in gmail_matches:
+            # Only add if it's not inside a markdown match
             is_inside_markdown = False
             for md_match in markdown_matches:
                 if match.start() >= md_match.start() and match.end() <= md_match.end():
@@ -249,6 +260,7 @@ class MarkdownTextWidget(ctk.CTkTextbox):
         for match in url_matches:
             # Only add URL if it's not inside a markdown match or gmail link
             is_inside_markdown = False
+            for md_match in markdown_matches:
                 if match.start() >= md_match.start() and match.end() <= md_match.end():
                     is_inside_markdown = True
                     break
@@ -265,8 +277,10 @@ class MarkdownTextWidget(ctk.CTkTextbox):
         # Sort by start position
         all_matches.sort(key=lambda x: x[1].start())
         
+        for match_type, match in all_matches:
             # Insert text before match with base font
             if match.start() > last_end:
+                self._text_widget.insert(index, text[last_end:match.start()], 'base')
             
             if match_type == 'markdown':
                 if match.group(2):  # ***bold italic***
@@ -280,17 +294,18 @@ class MarkdownTextWidget(ctk.CTkTextbox):
             elif match_type == 'gmail_link':
                 # Style Gmail links with special formatting
                 self._text_widget.insert(index, match.group(0), 'gmail_link')
-            elifself._text_widget.insert(index, match.group(0), 'gmail_link')
             elif match_type == 'url':
+                # Style URLs with link tag (no background, just color)
                 self._text_widget.insert(index, match.group(0), 'link')
             
             last_end = match.end()
         
+        # Insert remaining text with base font
         if last_end < len(text):
             self._text_widget.insert(index, text[last_end:], 'base')
     
     def _on_motion(self, event):
-        """Change cursor to hand when hovering over links."""
+        """Change cursor when hovering over links"""
         tags = self._text_widget.tag_names(f"@{event.x},{event.y}")
         if 'link' in tags or 'gmail_link' in tags:
             self._text_widget.config(cursor="hand2")
@@ -298,20 +313,25 @@ class MarkdownTextWidget(ctk.CTkTextbox):
             self._text_widget.config(cursor="")
     
     def _on_click(self, event):
-        """Open clicked links in default web browser."""
+        """Handle link clicks"""
         tags = self._text_widget.tag_names(f"@{event.x},{event.y}")
         
+        # Check if clicked on a link
         for tag in tags:
             if tag in self.links_map:
                 url = self.links_map[tag]
                 webbrowser.open(url)
                 return
         
+        # Check if it's a regular link or gmail link tag that we can extract the URL from
         if 'link' in tags or 'gmail_link' in tags:
+            # Extract the URL from the text at this position
             try:
+                # Get the range of the link tag
                 tag_name = 'link' if 'link' in tags else 'gmail_link'
                 ranges = self._text_widget.tag_ranges(tag_name)
                 
+                # Find which range contains our click position
                 text_index = self._text_widget.index(f"@{event.x},{event.y}")
                 
                 for i in range(0, len(ranges), 2):
@@ -323,10 +343,12 @@ class MarkdownTextWidget(ctk.CTkTextbox):
             except:
                 pass
 
+# Colors - Modern Professional Palette (Dark Theme Only)
 COLOR_PRIMARY = "#8AB4F8"
 COLOR_PRIMARY_DARK = "#5A96E8"
 COLOR_PRIMARY_LIGHT = "#3D5A80"
 COLOR_ACCENT = "#81C995"
+COLOR_WARNING = "#FBC02D"
 COLOR_ERROR = "#F28482"
 COLOR_BG = "#121212"
 COLOR_SURFACE = "#1E1E1E"
@@ -347,44 +369,39 @@ CURRENT_COLORS = {
 # ========== FONT SIZES ==========
 FONT_XS = 10      # Extra small - secondary text
 FONT_SM = 10     # Small - labels, combobox
-FONT_XS = 10
-FONT_XL = 13
-FONT_SM = 10
-FONT_MD = 11
-FONT_LG = 12
-FONT_XL = 13
-FONT_XXL = 14
-FONT_TITLE = 26
-FONT_ICON = 20
+FONT_MD = 11     # Medium - body text, buttons
+FONT_LG = 12     # Large - section titles
+FONT_XL = 13     # Extra large - panel titles
+FONT_XXL = 14    # 2X large - headers
+FONT_TITLE = 26  # Title - main heading
+FONT_ICON = 20   # Icon size
 
+# ========== CREDENTIALS ==========
 def save_credentials(creds):
-    """Save Gmail OAuth credentials to disk for persistent sessions."""
+    with open(TOKEN_CACHE_FILE, 'wb') as token:
+        pickle.dump(creds, token)
+
+def load_credentials():
     if os.path.exists(TOKEN_CACHE_FILE):
         with open(TOKEN_CACHE_FILE, 'rb') as token:
             return pickle.load(token)
     return None
 
 def delete_credentials():
-    """Delete saved Gmail OAuth credentials (logout)."""
     if os.path.exists(TOKEN_CACHE_FILE):
         os.remove(TOKEN_CACHE_FILE)
         return True
     return False
 
 def is_logged_in():
-    """Check if user has valid saved credentials."""
     return os.path.exists(TOKEN_CACHE_FILE)
 
-class MLStripper(HTMLParser):
-    """
-    HTML parser that strips tags and extracts plain text with embedded link URLs.
-    Converts HTML email content to readable plain text format.
-    """
 # ========== EMAIL UTILS ==========
 class MLStripper(HTMLParser):
     def __init__(self):
         super().__init__()
         self.reset()
+        self.strict = False
         self.convert_charrefs = True
         self.text = []
         self.current_link = None
@@ -393,7 +410,9 @@ class MLStripper(HTMLParser):
         # Extract href from anchor tags and store it
         if tag == 'a':
             for attr, value in attrs:
-        if tag == 'a' and self.current_link:
+                if attr == 'href':
+                    self.current_link = value
+                    break
 
     def handle_endtag(self, tag):
         # When anchor tag ends, append the link if we have one
@@ -406,68 +425,37 @@ class MLStripper(HTMLParser):
         self.text.append(d)
 
     def get_data(self):
-    """
-    Remove HTML tags and extract plain text with URLs.
-    
-    Args:
-        html: HTML string to process
-    
-    Returns:
-        str: Plain text with embedded URLs
-    """
-       
-    Extract email subject and sender from Gmail message metadata.
-    
-    Args:
-        service: Gmail API service object
-        message_id: Gmail message ID
-    
-    Returns:
-        tuple: (subject, sender) strings
-    
+        return ''.join(self.text)
 
 def strip_html_tags(html):
-    s =
-    Extract full email body/content with links from Gmail message.
-    Handles both plain text and HTML emails, extracting embedded URLs.
-    
-    Args:
-        service: Gmail API service object
-        message
-            Recursively parse multipart email to find text and HTML content.
-            
-            Args:
-                parts: List of email message parts
-            
-            Returns:
-                
-    
-    Returns:
-        str: Email body text (truncated to 5000 chars)
-    
+    s = MLStripper()
     try:
         s.feed(html)
         return s.get_data()
     except:
         return html
 
-def get_email_su subject and sender from message metadata"""
+def get_email_subject(service, message_id):
+    """Get email subject and sender from message metadata"""
     try:
         message = service.users().messages().get(userId='me', id=message_id, format='metadata').execute()
         headers = message.get('payload', {}).get('headers', [])
         subject = next((h['value'] for h in headers if h.get('name') == 'Subject'), "No Subject")
-        sender =ubject, sender
+        sender = next((h['value'] for h in headers if h.get('name') == 'From'), "Unknown")
+        return subject, sender
     except Exception as e:
         return "Error", str(e)
 
 def get_email_body_raw(service, message_id):
     """Get the full email body/content with links extracted"""
-    try:message = service.users().messages().get(userId='me', id=message_id, format='full').execute()
+    try:
+        message = service.users().messages().get(userId='me', id=message_id, format='full').execute()
         
         def parse_parts(parts):
             """Recursively parse email parts to find text and HTML content"""
             text_body = ""
             html_body = ""
+            
             for part in parts:
                 mime_type = part.get('mimeType', '')
                 
@@ -483,6 +471,7 @@ def get_email_body_raw(service, message_id):
                 elif mime_type == 'text/plain':
                     data = part.get('body', {}).get('data', '')
                     if data:
+                        text_body = base64.urlsafe_b64decode(data).decode('utf-8')
                 
                 # HTML content
                 elif mime_type == 'text/html':
@@ -505,6 +494,7 @@ def get_email_body_raw(service, message_id):
                 body = text_body
         
         # Fallback: try to get body from payload directly
+        if not body:
             payload = message.get('payload', {})
             mime_type = payload.get('mimeType', '')
             data = payload.get('body', {}).get('data', '')
@@ -521,31 +511,12 @@ def get_email_body_raw(service, message_id):
     except Exception as e:
         return f"Error reading email: {str(e)}"
 
-    """
-    Summarize email using Google Gemini AI and generate draft reply.
-    
-    Args:
-        body: Email body text to summarize
-        message_id: Optional Gmail message ID for generating Gmail link
-    
-    Returns:
-        str: Markdown-formatted summary with sections: SUMMARY, RELEVANT LINKS, DRAFT REPLY
-    """
 def gemini_summarize_and_reply(body, message_id=None):
-    """
-    Summarize email using Google Gemini AI and generate draft reply.
-    
-    Args:
-        body: Email body text to summarize
-        message_id: Optional Gmail message ID for generating Gmail link
-    
-    Returns:
-        str: Markdown-formatted summary with sections: SUMMARY, RELEVANT LINKS, DRAFT REPLY
-    """
     try:
         if not body.strip():
             return "No email content to summarize."
         
+        # Add Gmail link at the top if message_id is provided
         gmail_link = ""
         if message_id:
             gmail_link = f"**📧 Open in Gmail:** https://mail.google.com/mail/u/0/#inbox/{message_id}\n\n"
@@ -586,6 +557,7 @@ Email to analyze:
 {body}
 """
         
+        # Get API key from AppData/.env (priority) or config module (fallback)
         api_key = ""
         try:
             app_data_path = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "ai-email-summarizer"
@@ -597,10 +569,12 @@ Email to analyze:
         except Exception:
             pass
         
+        # Fallback to config if not found in AppData
         if not api_key:
             api_key = config.GEMINI_API_KEY.strip() if config.GEMINI_API_KEY else ""
         
         # Include API key in the URL for Gemini API
+        api_url = f"{GEMINI_ENDPOINT}?key={api_key}"
         
         headers = {
             "Content-Type": "application/json"
@@ -636,7 +610,8 @@ Email to analyze:
                     return f"Unexpected response structure"
                 
                 # Prepend Gmail link to the response
-                pt (KeyError, IndexError, TypeError) as e:
+                return gmail_link + ai_response
+            except (KeyError, IndexError, TypeError) as e:
                 return f"Error extracting text: {str(e)}"
         elif 'error' in resp_json:
             return f"Error from Gemini API: {resp_json['error'].get('message', 'Unknown Error')}"
@@ -647,19 +622,18 @@ Email to analyze:
 
 # ========== CUSTOM COMPONENTS ==========
 class EmailListItem(ctk.CTkFrame):
-class EmailListItem(ctk.CTkFrame):
-    """
-    Custom widget for displaying email list item in the inbox panel.
-    Shows subject and sender with visual feedback on selection.
-    """*kwargs)
+    def __init__(self, parent, subject, sender, command=None, **kwargs):
+        super().__init__(parent, **kwargs)
         
         self.command = command
         self.is_selected = False
+        self.parent = parent
         
         # Main container with subtle shadow/border - Material Design
         main_frame = ctk.CTkFrame(self, fg_color=COLOR_SURFACE, corner_radius=8, border_width=1, border_color=COLOR_BORDER)
         main_frame.pack(fill="both", expand=True, padx=3, pady=3)
         main_frame.configure(cursor="hand2")
+        
         self.main_frame = main_frame
         # Bind to all child elements
         self.bind("<Button-1>", self._on_click)
@@ -667,11 +641,13 @@ class EmailListItem(ctk.CTkFrame):
         
         # Content frame with proper Material Design padding
         content = ctk.CTkFrame(main_frame, fg_color=COLOR_SURFACE, cursor="hand2")
+        content.pack(fill="both", expand=True, padx=14, pady=11)
         content.bind("<Button-1>", self._on_click)
         
         # Subject - Material Design typography
         subject_text = subject[:50] + "..." if len(subject) > 50 else subject
         subject_label = ctk.CTkLabel(
+            content,
             text=subject_text,
             font=("Segoe UI", FONT_MD, "bold"),
             text_color=COLOR_PRIMARY,
@@ -684,6 +660,7 @@ class EmailListItem(ctk.CTkFrame):
         # Sender - Secondary text color with proper contrast
         sender_text = sender[:50] + "..." if len(sender) > 50 else sender
         sender_label = ctk.CTkLabel(
+            content,
             text=sender_text,
             font=("Segoe UI", FONT_XS),
             text_color=COLOR_TEXT_SECONDARY,
@@ -700,7 +677,7 @@ class EmailListItem(ctk.CTkFrame):
         self.is_selected = True
         # Active tab: green border only, no background color change
         self.main_frame.configure(fg_color=COLOR_SURFACE, border_color=COLOR_ACCENT, border_width=2)
-        self.subject_label_ref.confi
+        self.subject_label_ref.configure(text_color=COLOR_PRIMARY)
         self.sender_label_ref.configure(text_color=COLOR_TEXT)
         if self.command:
             self.command()
@@ -709,21 +686,19 @@ class EmailListItem(ctk.CTkFrame):
         """Apply selection styling without triggering the command"""
         self.is_selected = True
         self.main_frame.configure(fg_color=COLOR_SURFACE, border_color=COLOR_ACCENT, border_width=2)
-        self.subjvisual selection styling without triggering command callback.)
+        self.subject_label_ref.configure(text_color=COLOR_PRIMARY)
         self.sender_label_ref.configure(text_color=COLOR_TEXT)
 
     def deselect(self):
         self.is_selected = False
-        # Return to def
-        """Remove visual selection styling."""ault styling
+        # Return to default styling
+        self.main_frame.configure(fg_color=COLOR_SURFACE, border_color=COLOR_BORDER, border_width=1)
         self.subject_label_ref.configure(text_color=COLOR_PRIMARY)
 
 
 # ========== SETUP SCREEN ==========
 class SetupScreen(ctk.CTkToplevel):
-    """
-    First-time setup wizard dialog for configuring API key and Gmail credentials.
-    Guides users through credential setup and validates inputs before saving.
+    """First-time setup wizard for credentials and API keys"""
     
     def __init__(self, parent, is_change_mode=False, previous_api_key=None, previous_creds_file=None):
         super().__init__(parent)
@@ -738,7 +713,11 @@ class SetupScreen(ctk.CTkToplevel):
         self.geometry("600x700")
         self.resizable(False, False)
         self.configure(fg_color=COLOR_BG)
+        
+        # Make it modal
         self.transient(parent)
+        # Don't use grab_set() - it prevents minimizing
+        # Just use transient() to keep it on top of parent
         
         # Center on screen
         parent.update_idletasks()
@@ -746,10 +725,12 @@ class SetupScreen(ctk.CTkToplevel):
         
         # Get screen dimensions
         screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
         
         # Calculate center position on screen (window is 600x700)
         window_w = 600
         window_h = 700
+        x = (screen_w - window_w) // 2
         y = (screen_h - window_h) // 2
         
         # Ensure no negative coordinates
@@ -757,41 +738,46 @@ class SetupScreen(ctk.CTkToplevel):
         y = max(0, y)
         
         self.geometry(f"+{int(x)}+{int(y)}")
+        
         self.credentials_file_path = previous_creds_file  # Auto-fill if provided
         self.result = {"api_key": "", "credentials_file": None}
         self.changes_made = False  # Track if user actually made changes
         self.user_cancelled = False  # Track if user closed without saving
         self.previous_api_key = previous_api_key  # Store for comparison
-        self.previous_creds_file = previous_creds_file  
+        self.previous_creds_file = previous_creds_file  # Store for comparison
         
-        # Handle close button (X)
-        self.user_cancelled = False
-        self.previous_api_key = previous_api_key
-        self.previous_creds_file = previous_creds_file
+        # Handle close button (X) - behavior depends on mode
+        self.protocol("WM_DELETE_WINDOW", self.on_window_close)
         
+        self.create_setup_ui()
+        
+        # Ensure the window is visible and on top
         self.lift()
         self.focus()
     
     def on_window_close(self):
         """Handle window close button (X) - notify parent to exit if during setup"""
-        self.lift()
-        self.focus()
-    
-    def on_window_close(self):
-        """Handle window close button - notify parent to exit if during initial setup.
+        self.user_cancelled = True
+        
+        # If this is first-time setup (not change mode), tell parent to exit completely
+        if not self.is_change_mode and hasattr(self.parent_app, 'close_requested'):
+            self.parent_app.close_requested = True
+            self.parent_app.setup_in_progress = False
         
         # Close this dialog
         self.destroy()
     
-    def """Create the setup UI"""
+    def create_setup_ui(self):
+        """Create the setup UI"""
         # Main container with padding
         container = ctk.CTkFrame(self, fg_color=COLOR_BG)
         container.pack(fill="both", expand=True, padx=30, pady=30)
         
-        self.destroy()
-    
-    def create_setup_ui(self):
-        """Create setup dialog UI with API key and credentials file inputs.
+        # Title based on mode
+        if self.is_change_mode:
+            title_text = "🔄 Update Your Credentials"
+            subtitle_text = "Change your API key or Gmail credentials"
+        else:
             title_text = "🚀 Welcome to AI Email Summarizer Pro"
             subtitle_text = "Let's get you set up in 2 minutes"
         
@@ -1378,9 +1364,11 @@ class LoginMonitorWindow(ctk.CTkToplevel):
         self.resizable(False, False)
         self.configure(fg_color=COLOR_BG)
         
+        # Make it modal
         self.transient(parent)
         self.grab_set()
         
+        # Center on parent
         self.update_idletasks()
         x = parent.winfo_x() + (parent.winfo_width() // 2) - 225
         y = parent.winfo_y() + (parent.winfo_height() // 2) - 125
@@ -1395,10 +1383,11 @@ class LoginMonitorWindow(ctk.CTkToplevel):
         self.start_monitoring()
     
     def create_ui(self):
-        """Create monitoring dialog UI with progress bar and status text."""
+        """Create the monitoring UI"""
         container = ctk.CTkFrame(self, fg_color=COLOR_BG)
         container.pack(fill="both", expand=True, padx=30, pady=30)
         
+        # Title
         title = ctk.CTkLabel(
             container,
             text="🔐 Signing In...",
@@ -1407,6 +1396,7 @@ class LoginMonitorWindow(ctk.CTkToplevel):
         )
         title.pack(pady=(0, 15))
         
+        # Instructions
         instructions = ctk.CTkLabel(
             container,
             text="A browser window has opened.\n\n"
@@ -1419,6 +1409,7 @@ class LoginMonitorWindow(ctk.CTkToplevel):
         )
         instructions.pack(pady=(0, 25))
         
+        # Progress animation
         progress_frame = ctk.CTkFrame(container, fg_color=COLOR_BG)
         progress_frame.pack(fill="x", pady=(0, 20))
         
@@ -1433,6 +1424,7 @@ class LoginMonitorWindow(ctk.CTkToplevel):
         self.progress_bar.set(0)
         
         # Status label
+        self.status_label = ctk.CTkLabel(
             container,
             text="⏳ Waiting for browser...",
             font=("Segoe UI", 10),
@@ -1441,6 +1433,7 @@ class LoginMonitorWindow(ctk.CTkToplevel):
         self.status_label.pack()
         
         # Cancel button
+        button_container = ctk.CTkFrame(container, fg_color=COLOR_BG)
         button_container.pack(fill="x", pady=(20, 0))
         
         retry_btn = ctk.CTkButton(
@@ -1471,16 +1464,18 @@ class LoginMonitorWindow(ctk.CTkToplevel):
     
     def start_monitoring(self):
         """Start monitoring for login completion"""
-        self.check_login_couloop for login completion detection.
+        self.check_login_count = 0
         self.animate_progress()
     
     def animate_progress(self):
         """Animate progress bar and check for login completion"""
-        if not self.login_complete aperiodically check for login completion.
+        if not self.login_complete and self.winfo_exists():
+            # Animate progress bar
             current = self.progress_bar.get()
             self.progress_bar.set((current + 0.05) % 1.0)
             
-            if self.check_login_count % 4 == 0:
+            # Check if login completed
+            if self.check_login_count % 4 == 0:  # Check every 2 seconds
                 self.check_login_callback()
             
             self.check_login_count += 1
@@ -1489,10 +1484,10 @@ class LoginMonitorWindow(ctk.CTkToplevel):
     def check_login_callback(self):
         """Call the flow callback to check for login completion"""
         try:
-            resuflow callback to check if OAuth login has completed.
+            result = self.flow_callback()
             if result:  # Login completed
                 self.login_complete = True
-                self.sre(text="✓ Login successful!")
+                self.status_label.configure(text="✓ Login successful!")
                 self.progress_bar.set(1.0)
                 self.after(500, self.destroy)
         except Exception:
@@ -1500,17 +1495,18 @@ class LoginMonitorWindow(ctk.CTkToplevel):
     
     def on_cancel(self):
         """User cancelled login - mark as cancelled and close"""
-        self.login_complete = True
-        selHandle cancel button - stop monitoring and close dialog.
+        self.login_complete = True  # Mark as complete so it stops checking
+        self.status_label.configure(text="✓ Login cancelled")
         self.destroy()
     
     def on_retry(self):
-        """Handle retry button - reopen OAuth browser window."""
+        """User wants to retry - open browser again"""
         try:
             if hasattr(self, 'auth_url'):
                 webbrowser.open(self.auth_url)
                 self.status_label.configure(text="⏳ Waiting for browser...")
                 self.need_retry = True
+                # Reset counters to keep monitoring
                 self.check_login_count = 0
         except Exception:
             pass
@@ -1519,10 +1515,8 @@ class LoginMonitorWindow(ctk.CTkToplevel):
 ctk.set_appearance_mode("dark")
 
 class EmailSummarizerApp(ctk.CTk):
-    """
-    Main application window for AI Email Summarizer Pro.
-    Manages Gmail authentication, email loading, AI summarization, and UI coordination.
-    """
+    def __init__(self):
+        super().__init__()
         
         # Create and set icon BEFORE anything else
         self._create_and_set_icon()
@@ -1538,26 +1532,33 @@ class EmailSummarizerApp(ctk.CTk):
         self.selected_email_id = None
         self.email_items = []
         self.max_emails = 5
-        self.current_theme = "dark"
-        self.setup_in_progress = True
-        self.close_requested = False
+        self.summarize_on_load = tk.BooleanVar(value=False)  # Toggle: lazy vs eager
+        self.current_theme = "dark"  # Track current theme
+        self.setup_in_progress = True  # Track if setup is happening
+        self.close_requested = False  # Track if user clicked close button
         
         # Handle close button - always use this handler
         self.protocol("WM_DELETE_WINDOW", self.on_close_requested)
         
+        # Withdraw window during setup to avoid showing background window
         self.withdraw()
-        self.update_idletasks()
+        self.update_idletasks()  # Force window creation without showing it
         
+        # Check for first-time setup BEFORE creating any widgets
+        # This will block until setup is complete if needed
         self._do_first_time_setup()
         
         # If user closed the window, exit now
         if self.close_requested:
             self.destroy()
-        if self.close_requested:
-            self.destroy()
             return
         
+        # Mark setup as complete
         self.setup_in_progress = False
+        
+        # Now create widgets only after setup is done
+        self.create_widgets()
+        self.check_login_status()
         
         # Show the window at full size
         self.after(0, self._show_fullscreen)
@@ -1565,14 +1566,16 @@ class EmailSummarizerApp(ctk.CTk):
     def on_close_requested(self):
         """Handle window close button (X) - exit immediately"""
         self.close_requested = True
-        self.after(0, self._show_fullscreen)
-    
-    def on_close_requested(self):
-        """Handle window close button (X) - exit application immediately.
+        self.setup_in_progress = False
+
+        # Tear down any active setup dialog
+        if hasattr(self, '_setup_screen') and self._setup_screen and self._setup_screen.winfo_exists():
+            try:
                 self._setup_screen.destroy()
             except:
                 pass
 
+        self.destroy()
         import sys
         sys.exit(0)
     
@@ -1585,7 +1588,7 @@ class EmailSummarizerApp(ctk.CTk):
             
             # Create app data directory
             app_data_dir = os.path.join(os.path.expanduser('~'), '.ai_email_summarizer')
-            os.makepplication icon and set it for titlebar and taskbar (Windows).
+            os.makedirs(app_data_dir, exist_ok=True)
             icon_path = os.path.join(app_data_dir, 'app_icon.ico')
             
             # Create icon at ultra-high resolution for maximum sharpness
