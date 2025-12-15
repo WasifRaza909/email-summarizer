@@ -1,10 +1,16 @@
-# ========== FAST SPLASH SCREEN (loads instantly with minimal imports) ==========
+"""
+AI Email Summarizer Pro
+
+This application provides an intelligent email summarization tool that connects to Gmail,
+fetches emails, and uses Google's Gemini AI to generate concise summaries and draft replies.
+It features a modern dark-themed UI with OAuth authentication and secure credential management.
+"""
+
 import sys
 import os
 import tkinter as tk
 from tkinter import ttk
 
-# Fix for PyInstaller bundled app - set working directory early
 if getattr(sys, 'frozen', False):
     os.chdir(os.path.dirname(sys.executable))
 
