@@ -3,7 +3,7 @@ Creates a multi-resolution .ico icon file for AI Email Summarizer.
 Generates a professional envelope icon with AI indicator at various sizes for crisp Windows display.
 """
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 import math
 
 def create_icon_at_size(size):
