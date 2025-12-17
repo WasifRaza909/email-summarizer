@@ -205,7 +205,7 @@ To use the application, you need two free Google credentials. Follow these steps
 2. **Initial Configuration Screen**
    - The app opens with a setup wizard
    - Enter your **Gemini API Key** in the text field
-   - Click **"Browse"** to select your **credentials.json** file
+   - Click **"Select credentials.json"** to select your **credentials.json** file
    - Click **"Save & Continue"**
 
 3. **API Validation**
@@ -259,7 +259,7 @@ To use the application, you need two free Google credentials. Follow these steps
    - Direct Gmail link to the original email
 
 **Bulk Summary View:**
-1. Click **"View All Summaries"** button at the bottom
+1. Click **"View All Summaries"** button at the top
 2. A new window opens showing all email summaries at once
 3. Scroll through to get a complete overview
 4. Perfect for quickly understanding your entire inbox
@@ -269,7 +269,7 @@ To use the application, you need two free Google credentials. Follow these steps
 ### **Managing Credentials**
 
 **Change API Key or Gmail Account:**
-1. Click **"Change Credentials"** button (gear icon)
+1. Click **"Change Credentials"** button
 2. Enter new Gemini API key (or keep the current one)
 3. Select a new credentials.json file (or keep current)
 4. Click **"Save & Continue"**
@@ -356,17 +356,19 @@ To use the application, you need two free Google credentials. Follow these steps
 **File Structure:**
 ```
 AI Email Summarizer/
-├── app.py                          # Main application
-├── config.py                       # Configuration storage
-├── requirements.txt                # Python dependencies
-├── credentials.json                # OAuth credentials (user-provided)
-├── gmail_token.pkl                 # Cached authentication token
-├── app_icon.ico                    # Application icon
-├── AI Email Summarizer.spec        # PyInstaller build spec
-├── Launch Ai Email Summarizer.bat  # Windows launcher
-├── dist/
-│   └── AI Email Summarizer.exe     # Standalone executable
-└── README.md                       # This file
+├── LICENSE                         # License file
+├── source/
+│   ├── app.py                      # Main application
+│   ├── config.py                   # Configuration storage
+│   ├── requirements.txt            # Python dependencies
+│   ├── credentials.example.json    # OAuth credentials template
+│   ├── AI Email Summarizer.spec    # PyInstaller build spec
+│   ├── Launch Ai Email Summarizer.bat  # Windows launcher
+│   └── README.md                   # Read Me file
+├── executable/
+│   ├── AI Email Summarizer.exe     # Standalone executable
+│   └── token.pkl    # Cached Gmail authentication token (Created at runtime)
+├── demo/                           # Demo screenshots
 ```
 
 ---

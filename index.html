@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Email Summarizer Pro - Professional AI-Powered Gmail Management</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #e0e0e0;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: #0f1419;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 60px 40px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .subtitle {
+            font-size: 1.3em;
+            opacity: 0.95;
+            font-weight: 300;
+        }
+
+        .tagline {
+            font-size: 1.1em;
+            margin-top: 20px;
+            line-height: 1.8;
+            opacity: 0.9;
+        }
+
+        nav {
+            background: #1a1f2e;
+            padding: 15px 40px;
+            border-bottom: 2px solid #667eea;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        nav a {
+            color: #e0e0e0;
+            text-decoration: none;
+            margin: 0 15px;
+            padding: 8px 16px;
+            border-radius: 5px;
+            transition: all 0.3s;
+            display: inline-block;
+        }
+
+        nav a:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        section {
+            margin-bottom: 60px;
+            padding: 30px;
+            background: #1a1f2e;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        h2 {
+            color: #667eea;
+            font-size: 2.2em;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #2a2f3e;
+        }
+
+        h3 {
+            color: #8b9dc3;
+            font-size: 1.6em;
+            margin: 25px 0 15px 0;
+        }
+
+        h4 {
+            color: #a0aec0;
+            font-size: 1.3em;
+            margin: 20px 0 10px 0;
+        }
+
+        p {
+            margin-bottom: 15px;
+            color: #cbd5e0;
+        }
+
+        ul, ol {
+            margin: 15px 0 15px 30px;
+            color: #cbd5e0;
+        }
+
+        li {
+            margin-bottom: 10px;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+            margin: 30px 0;
+        }
+
+        .feature-card {
+            background: #2a2f3e;
+            padding: 25px;
+            border-radius: 8px;
+            border: 1px solid #3a3f4e;
+            transition: all 0.3s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.3);
+            border-color: #667eea;
+        }
+
+        .feature-card h4 {
+            color: #667eea;
+            margin-top: 0;
+        }
+
+        .checkmark {
+            color: #48bb78;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+
+        .icon {
+            font-size: 1.5em;
+            margin-right: 10px;
+        }
+
+        code {
+            background: #2d3748;
+            color: #f687b3;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        pre {
+            background: #2d3748;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+            border: 1px solid #4a5568;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+            display: block;
+            color: #68d391;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            transition: all 0.3s;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .info-box {
+            background: #2c5282;
+            border-left: 4px solid #4299e1;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .warning-box {
+            background: #744210;
+            border-left: 4px solid #ed8936;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .success-box {
+            background: #22543d;
+            border-left: 4px solid #48bb78;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .step {
+            background: #2a2f3e;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 6px;
+            border-left: 3px solid #667eea;
+        }
+
+        .step-number {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            background: #667eea;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            font-weight: bold;
+            margin-right: 15px;
+        }
+
+        .faq-item {
+            background: #2a2f3e;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 6px;
+            border: 1px solid #3a3f4e;
+        }
+
+        .faq-question {
+            color: #667eea;
+            font-weight: 600;
+            font-size: 1.1em;
+            margin-bottom: 10px;
+        }
+
+        .faq-answer {
+            color: #cbd5e0;
+            padding-left: 20px;
+        }
+
+        .highlight {
+            background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
+            padding: 30px;
+            border-radius: 8px;
+            margin: 30px 0;
+            border: 2px solid #667eea;
+        }
+
+        footer {
+            background: #1a1f2e;
+            color: #8b9dc3;
+            text-align: center;
+            padding: 40px;
+            border-top: 2px solid #667eea;
+        }
+
+        .emoji {
+            font-style: normal;
+        }
+
+        a {
+            color: #667eea;
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        a:hover {
+            color: #8b9dc3;
+            text-decoration: underline;
+        }
+
+        hr {
+            border: none;
+            border-top: 1px solid #2a2f3e;
+            margin: 40px 0;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2em;
+            }
+
+            .content {
+                padding: 20px;
+            }
+
+            section {
+                padding: 20px;
+            }
+
+            nav a {
+                display: block;
+                margin: 5px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><span class="emoji">🤖</span> AI Email Summarizer Pro</h1>
+            <p class="subtitle">Professional AI-Powered Gmail Summarization & Management Tool</p>
+            <p class="tagline">Transform your email workflow with intelligent AI summarization powered by Google's Gemini AI. Process emails faster, understand context instantly, and never miss important messages. Perfect for professionals, businesses, and anyone managing high email volumes.</p>
+        </header>
+
+        <nav>
+            <a href="#overview">Overview</a>
+            <a href="#security">Security</a>
+            <a href="#features">Features</a>
+            <a href="#installation">Installation</a>
+            <a href="#setup">API Setup</a>
+            <a href="#getting-started">Getting Started</a>
+            <a href="#technical">Technical</a>
+            <a href="#faq">FAQ</a>
+        </nav>
+
+        <div class="content">
+            <!-- Overview Section -->
+            <section id="overview">
+                <h2><span class="emoji">🎯</span> Overview</h2>
+                <p>AI Email Summarizer Pro is a fully optimized, production-ready desktop application that connects to your Gmail account and uses Google's advanced Gemini AI to generate concise summaries and draft intelligent replies. Built with modern technology and a beautiful dark-themed interface, it streamlines email management while keeping your data 100% secure and private.</p>
+                <p><strong>Compatible with:</strong> Windows, macOS, Linux</p>
+            </section>
+
+            <!-- Security Section -->
+            <section id="security">
+                <h2><span class="emoji">🔒</span> Security & Privacy First</h2>
+                <p>Your data security is our top priority:</p>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4><span class="checkmark">✅</span> 100% Local Processing</h4>
+                        <p>All data stays on your machine, never uploaded to any server</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4><span class="checkmark">✅</span> OAuth 2.0 Authentication</h4>
+                        <p>Industry-standard secure authentication, no password storage</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4><span class="checkmark">✅</span> Zero Data Collection</h4>
+                        <p>We don't collect, store, or transmit your personal information</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4><span class="checkmark">✅</span> Encrypted Token Caching</h4>
+                        <p>Credentials cached securely on your local machine only</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4><span class="checkmark">✅</span> Open Source Transparency</h4>
+                        <p>Full source code available for review and audit</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4><span class="checkmark">✅</span> No Third-Party Tracking</h4>
+                        <p>No analytics, no telemetry, complete privacy</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Features Section -->
+            <section id="features">
+                <h2><span class="emoji">✨</span> Key Features</h2>
+
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4><span class="emoji">🚀</span> Optimized Performance</h4>
+                        <ul>
+                            <li>Professional Splash Screen</li>
+                            <li>Fast Startup</li>
+                            <li>Smooth UI</li>
+                            <li>Efficient Threading</li>
+                        </ul>
+                    </div>
+
+                    <div class="feature-card">
+                        <h4><span class="emoji">📧</span> Email Management</h4>
+                        <ul>
+                            <li>Batch Email Loading (2-20 emails)</li>
+                            <li>Smart Filtering</li>
+                            <li>Email Preview</li>
+                            <li>Click to Expand</li>
+                        </ul>
+                    </div>
+
+                    <div class="feature-card">
+                        <h4><span class="emoji">🤖</span> AI-Powered Intelligence</h4>
+                        <ul>
+                            <li>Instant Summaries</li>
+                            <li>Draft Replies</li>
+                            <li>Markdown Rendering</li>
+                            <li>Bulk Summary View</li>
+                        </ul>
+                    </div>
+
+                    <div class="feature-card">
+                        <h4><span class="emoji">🎨</span> Modern User Interface</h4>
+                        <ul>
+                            <li>Dark Theme</li>
+                            <li>Intuitive Layout</li>
+                            <li>Interactive Elements</li>
+                            <li>Responsive Design</li>
+                        </ul>
+                    </div>
+
+                    <div class="feature-card">
+                        <h4><span class="emoji">🔐</span> Authentication & Credentials</h4>
+                        <ul>
+                            <li>OAuth 2.0 Flow</li>
+                            <li>Credential Manager</li>
+                            <li>Token Caching</li>
+                            <li>Easy Re-authentication</li>
+                        </ul>
+                    </div>
+
+                    <div class="feature-card">
+                        <h4><span class="emoji">💼</span> Professional Quality</h4>
+                        <ul>
+                            <li>Production Ready</li>
+                            <li>Executable Build</li>
+                            <li>Portable</li>
+                            <li>Cross-Platform</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Installation Section -->
+            <section id="installation">
+                <h2><span class="emoji">📦</span> Multiple Installation Options</h2>
+                <p>We provide <strong>three flexible ways</strong> to run the application - choose what works best for you:</p>
+
+                <div class="step">
+                    <h3><span class="step-number">1</span> Standalone Executable (Recommended for Windows)</h3>
+                    <p><strong>Perfect for end users who want instant access without any setup.</strong></p>
+                    <ol>
+                        <li>Navigate to the <code>dist</code> folder</li>
+                        <li>Double-click <strong>AI Email Summarizer.exe</strong></li>
+                        <li>The app launches immediately - no Python or dependencies needed!</li>
+                    </ol>
+                    <div class="success-box">
+                        <strong>Advantages:</strong>
+                        <ul>
+                            <li><span class="checkmark">✅</span> No Python installation required</li>
+                            <li><span class="checkmark">✅</span> No dependency management</li>
+                            <li><span class="checkmark">✅</span> One-click launch</li>
+                            <li><span class="checkmark">✅</span> Portable - run from USB drive or any folder</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">2</span> Batch File Launcher (Windows)</h3>
+                    <p><strong>Convenient launcher that handles Python environment automatically.</strong></p>
+                    <ol>
+                        <li>Double-click <strong>Launch Ai Email Summarizer.bat</strong></li>
+                        <li>The batch file activates the Python environment and runs the app</li>
+                        <li>Ideal for development or if you prefer running the Python version</li>
+                    </ol>
+                    <div class="success-box">
+                        <strong>Advantages:</strong>
+                        <ul>
+                            <li><span class="checkmark">✅</span> Automatic environment activation</li>
+                            <li><span class="checkmark">✅</span> Runs latest code changes during development</li>
+                            <li><span class="checkmark">✅</span> Easy debugging</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">3</span> Direct Python Execution (All Platforms)</h3>
+                    <p><strong>For developers or advanced users who want full control.</strong></p>
+                    
+                    <h4>Prerequisites</h4>
+                    <ul>
+                        <li>Python 3.8 or higher</li>
+                        <li>pip (Python package manager)</li>
+                    </ul>
+
+                    <h4>Installation Steps</h4>
+                    <ol>
+                        <li><strong>Clone or Download</strong>
+                            <pre><code>cd "AI Email Summarizer"</code></pre>
+                        </li>
+                        <li><strong>Install Dependencies</strong>
+                            <pre><code>pip install -r requirements.txt</code></pre>
+                        </li>
+                        <li><strong>Run the Application</strong>
+                            <pre><code>python app.py</code></pre>
+                        </li>
+                    </ol>
+
+                    <div class="success-box">
+                        <strong>Advantages:</strong>
+                        <ul>
+                            <li><span class="checkmark">✅</span> Cross-platform (Windows, macOS, Linux)</li>
+                            <li><span class="checkmark">✅</span> Full source code access</li>
+                            <li><span class="checkmark">✅</span> Customizable and extensible</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- API Setup Section -->
+            <section id="setup">
+                <h2><span class="emoji">🔑</span> API Setup Guide</h2>
+                <p>To use the application, you need two free Google credentials. Follow these steps:</p>
+
+                <div class="step">
+                    <h3><span class="step-number">1</span> Create Google Cloud Project</h3>
+                    <ol>
+                        <li>Visit <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a></li>
+                        <li>Click the <strong>project dropdown</strong> at the top-left</li>
+                        <li>Click <strong>"NEW PROJECT"</strong></li>
+                        <li>Enter project name: <code>AI Email Summarizer Pro</code></li>
+                        <li>Click <strong>"CREATE"</strong> and wait for project creation</li>
+                    </ol>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">2</span> Enable Gmail API</h3>
+                    <ol>
+                        <li>In your new project, search for <strong>"Gmail API"</strong> in the search bar</li>
+                        <li>Click on <strong>Gmail API</strong> from results</li>
+                        <li>Click <strong>"ENABLE"</strong> button</li>
+                        <li>Wait for activation (takes a few seconds)</li>
+                    </ol>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">3</span> Create OAuth 2.0 Credentials</h3>
+                    <ol>
+                        <li>Go to <strong>APIs & Services</strong> → <strong>Credentials</strong> (left sidebar)</li>
+                        <li>Click <strong>"+ CREATE CREDENTIALS"</strong> → <strong>"OAuth client ID"</strong></li>
+                        <li>If prompted to configure OAuth consent screen:
+                            <ul>
+                                <li>Select <strong>"External"</strong> user type</li>
+                                <li>Fill in required fields (App name, email)</li>
+                                <li>Click <strong>"SAVE AND CONTINUE"</strong> through all steps</li>
+                                <li>Add yourself as a test user</li>
+                            </ul>
+                        </li>
+                        <li>Return to <strong>Credentials</strong> tab</li>
+                        <li>Click <strong>"+ CREATE CREDENTIALS"</strong> → <strong>"OAuth client ID"</strong></li>
+                        <li>Select <strong>"Desktop application"</strong></li>
+                        <li>Name it: <code>AI Email Summarizer Desktop</code></li>
+                        <li>Click <strong>"CREATE"</strong></li>
+                        <li>Click <strong>"DOWNLOAD JSON"</strong></li>
+                        <li>Save the downloaded file as <strong><code>credentials.json</code></strong> in the app folder</li>
+                    </ol>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">4</span> Get Gemini API Key</h3>
+                    <ol>
+                        <li>Visit <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a></li>
+                        <li>Sign in with your Google account</li>
+                        <li>Click <strong>"Get API Key"</strong> or <strong>"Create API Key"</strong></li>
+                        <li>Select your Cloud project (or create a new one)</li>
+                        <li>Copy the generated API key (format: <code>AIzaSy...</code>)</li>
+                        <li>Store it securely - you'll enter it in the app</li>
+                    </ol>
+                </div>
+            </section>
+
+            <!-- Getting Started Section -->
+            <section id="getting-started">
+                <h2><span class="emoji">🚀</span> Getting Started</h2>
+
+                <h3>First Launch Setup</h3>
+                <div class="step">
+                    <ol>
+                        <li><strong>Launch the Application</strong> (using any of the three methods above)</li>
+                        <li><strong>Initial Configuration Screen</strong>
+                            <ul>
+                                <li>Enter your <strong>Gemini API Key</strong> in the text field</li>
+                                <li>Click <strong>"Select credentials.json"</strong> to select your <strong>credentials.json</strong> file</li>
+                                <li>Click <strong>"Save & Continue"</strong></li>
+                            </ul>
+                        </li>
+                        <li><strong>API Validation</strong>
+                            <ul>
+                                <li>The app automatically validates your Gemini API key</li>
+                                <li>Shows progress with visual feedback</li>
+                            </ul>
+                        </li>
+                        <li><strong>You're Ready!</strong> Configuration is saved to <code>config.py</code></li>
+                    </ol>
+                </div>
+
+                <h3>Gmail Authentication</h3>
+                <div class="step">
+                    <ol>
+                        <li>Click the <strong>"Login"</strong> button in the main window</li>
+                        <li>Your default browser opens automatically</li>
+                        <li>Sign in with your Google account</li>
+                        <li>Review and accept the permission request</li>
+                        <li>You'll see "Authentication successful" in the browser</li>
+                        <li>Return to the application - you're now logged in!</li>
+                        <li>Your authentication token is cached in <code>gmail_token.pkl</code></li>
+                    </ol>
+                </div>
+
+                <h3>Loading Emails</h3>
+                <div class="step">
+                    <ol>
+                        <li>Use the <strong>dropdown menu</strong> to select how many emails to load (2-20)</li>
+                        <li>Click <strong>"Load Emails"</strong> button</li>
+                        <li>The app fetches your latest unread emails</li>
+                        <li>Email cards appear showing sender, subject, and preview snippet</li>
+                    </ol>
+                </div>
+
+                <h3>Viewing Summaries & Replies</h3>
+                <div class="step">
+                    <h4>Individual Email View:</h4>
+                    <ol>
+                        <li>Click on any email card in the list</li>
+                        <li>The right panel displays AI-generated summary and suggested reply</li>
+                        <li>Summaries include bold highlights, bullet points, and formatted text</li>
+                    </ol>
+
+                    <h4>Bulk Summary View:</h4>
+                    <ol>
+                        <li>Click <strong>"View All Summaries"</strong> button at the top</li>
+                        <li>A new window opens showing all email summaries at once</li>
+                        <li>Perfect for quickly understanding your entire inbox</li>
+                    </ol>
+                </div>
+            </section>
+
+            <!-- Technical Specifications -->
+            <section id="technical">
+                <h2><span class="emoji">🛠️</span> Technical Specifications</h2>
+
+                <h3>Built With:</h3>
+                <ul>
+                    <li><strong>Python 3.8+</strong> - Core language</li>
+                    <li><strong>CustomTkinter</strong> - Modern UI framework</li>
+                    <li><strong>Google APIs</strong> - Gmail & Gemini integration</li>
+                    <li><strong>google-auth-oauthlib</strong> - OAuth authentication</li>
+                    <li><strong>googleapiclient</strong> - Gmail API client</li>
+                    <li><strong>requests</strong> - HTTP client for Gemini API</li>
+                    <li><strong>PyInstaller</strong> - Executable compilation</li>
+                </ul>
+
+                <h3>Requirements:</h3>
+                <ul>
+                    <li>Python 3.8 or higher (for source execution)</li>
+                    <li>Internet connection (for Gmail/Gemini API)</li>
+                    <li>Google Cloud Project with Gmail API enabled</li>
+                    <li>Gemini API key</li>
+                    <li>Windows/macOS/Linux operating system</li>
+                </ul>
+
+                <h3>Complete Feature List:</h3>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>Core Functionality</h4>
+                        <ul>
+                            <li><span class="checkmark">✅</span> OAuth 2.0 Gmail authentication</li>
+                            <li><span class="checkmark">✅</span> Secure credential management</li>
+                            <li><span class="checkmark">✅</span> Gemini AI integration</li>
+                            <li><span class="checkmark">✅</span> Batch email processing</li>
+                            <li><span class="checkmark">✅</span> AI-generated summaries</li>
+                            <li><span class="checkmark">✅</span> AI-generated replies</li>
+                        </ul>
+                    </div>
+
+                    <div class="feature-card">
+                        <h4>User Interface</h4>
+                        <ul>
+                            <li><span class="checkmark">✅</span> Professional splash screen</li>
+                            <li><span class="checkmark">✅</span> Modern dark theme</li>
+                            <li><span class="checkmark">✅</span> CustomTkinter-based UI</li>
+                            <li><span class="checkmark">✅</span> Responsive layout</li>
+                            <li><span class="checkmark">✅</span> Interactive email cards</li>
+                            <li><span class="checkmark">✅</span> Markdown rendering</li>
+                        </ul>
+                    </div>
+
+                    <div class="feature-card">
+                        <h4>Security</h4>
+                        <ul>
+                            <li><span class="checkmark">✅</span> Local-only data storage</li>
+                            <li><span class="checkmark">✅</span> No server communication</li>
+                            <li><span class="checkmark">✅</span> Encrypted OAuth tokens</li>
+                            <li><span class="checkmark">✅</span> No password storage</li>
+                            <li><span class="checkmark">✅</span> Privacy-first design</li>
+                        </ul>
+                    </div>
+
+                    <div class="feature-card">
+                        <h4>Advanced Features</h4>
+                        <ul>
+                            <li><span class="checkmark">✅</span> Real-time API validation</li>
+                            <li><span class="checkmark">✅</span> Multi-threaded processing</li>
+                            <li><span class="checkmark">✅</span> Error handling & recovery</li>
+                            <li><span class="checkmark">✅</span> Custom application icon</li>
+                            <li><span class="checkmark">✅</span> Clean exit handling</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- FAQ Section -->
+            <section id="faq">
+                <h2><span class="emoji">❓</span> Frequently Asked Questions</h2>
+
+                <div class="faq-item">
+                    <div class="faq-question">Q: Is my Gmail data safe?</div>
+                    <div class="faq-answer">
+                        <strong>A:</strong> Absolutely! The app uses OAuth 2.0 (industry standard), and your password is never stored or transmitted. All processing happens locally on your machine. Email content is only sent to Google's Gemini API for summarization and never stored anywhere.
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <div class="faq-question">Q: Does this cost money to use?</div>
+                    <div class="faq-answer">
+                        <strong>A:</strong> No! Both Gmail API and Gemini API have generous free tiers. For typical personal use, you won't hit the limits.
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <div class="faq-question">Q: Where are my credentials stored?</div>
+                    <div class="faq-answer">
+                        <strong>A:</strong> All credentials are stored locally:
+                        <ul>
+                            <li>API key: <code>config.py</code> (plain text, keep secure)</li>
+                            <li>OAuth credentials: <code>credentials.json</code> (JSON file)</li>
+                            <li>Authentication token: <code>gmail_token.pkl</code> (encrypted cache)</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <div class="faq-question">Q: Can I use multiple Gmail accounts?</div>
+                    <div class="faq-answer">
+                        <strong>A:</strong> Yes! Click "Change Credentials" to switch accounts. You'll need to re-authenticate with the new account.
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <div class="faq-question">Q: How many emails can I process?</div>
+                    <div class="faq-answer">
+                        <strong>A:</strong> You can load and summarize 2-20 emails per batch. The limit prevents API rate limiting and ensures smooth performance.
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <div class="faq-question">Q: Does this work offline?</div>
+                    <div class="faq-answer">
+                        <strong>A:</strong> No, you need an internet connection to fetch emails from Gmail and generate summaries via Gemini API.
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <div class="faq-question">Q: Can I see the source code?</div>
+                    <div class="faq-answer">
+                        <strong>A:</strong> Yes! All source code is included. Review <code>app.py</code> to see exactly how the app works.
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <div class="faq-question">Q: What if I get an error during setup?</div>
+                    <div class="faq-answer">
+                        <strong>A:</strong> Common issues:
+                        <ul>
+                            <li><strong>Invalid API key:</strong> Double-check your Gemini API key</li>
+                            <li><strong>Invalid credentials.json:</strong> Ensure you downloaded the OAuth Desktop client JSON</li>
+                            <li><strong>Gmail API not enabled:</strong> Enable Gmail API in your Google Cloud project</li>
+                            <li><strong>Permission denied:</strong> Add yourself as a test user in OAuth consent screen</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Use Cases -->
+            <section id="use-cases">
+                <h2><span class="emoji">🎯</span> Use Cases</h2>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>Busy Professionals</h4>
+                        <p>Quickly understand dozens of emails without reading each one</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>Customer Support</h4>
+                        <p>Get instant summaries of customer inquiries</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>Business Executives</h4>
+                        <p>Stay on top of important communications</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>Freelancers</h4>
+                        <p>Manage client emails efficiently</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>Students</h4>
+                        <p>Process academic emails and notifications</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>Anyone with Email Overload</h4>
+                        <p>Regain control of your inbox</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Why Choose -->
+            <section id="why-choose">
+                <h2><span class="emoji">🏆</span> Why Choose AI Email Summarizer Pro?</h2>
+                <div class="highlight">
+                    <ul>
+                        <li><span class="checkmark">✅</span> <strong>Fully Optimized</strong> - Fast, efficient, production-ready</li>
+                        <li><span class="checkmark">✅</span> <strong>Multiple Run Options</strong> - .exe, .bat, or Python - your choice</li>
+                        <li><span class="checkmark">✅</span> <strong>Professional Quality</strong> - Clean code, modern UI, excellent UX</li>
+                        <li><span class="checkmark">✅</span> <strong>100% Secure</strong> - Privacy-first design, local processing only</li>
+                        <li><span class="checkmark">✅</span> <strong>AI-Powered</strong> - Google's advanced Gemini AI</li>
+                        <li><span class="checkmark">✅</span> <strong>Open Source</strong> - Full transparency and customization</li>
+                        <li><span class="checkmark">✅</span> <strong>No Subscription</strong> - Free Google APIs</li>
+                        <li><span class="checkmark">✅</span> <strong>Regular Updates</strong> - Continuous improvements</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Call to Action -->
+            <section id="cta">
+                <h2><span class="emoji">🚀</span> Get Started Now!</h2>
+                <div class="highlight" style="text-align: center;">
+                    <ol style="text-align: left; display: inline-block; margin: 20px auto;">
+                        <li>Choose your preferred launch method (.exe, .bat, or Python)</li>
+                        <li>Set up your Google Cloud credentials (5 minutes)</li>
+                        <li>Launch the app and enjoy AI-powered email management!</li>
+                    </ol>
+                    <p style="font-size: 1.3em; margin-top: 30px;"><strong>Transform your email workflow today. Work smarter, not harder.</strong> <span class="emoji">🎯</span></p>
+                </div>
+            </section>
+        </div>
+
+        <footer>
+            <h3>AI Email Summarizer Pro</h3>
+            <p>Professional AI-Powered Gmail Management Tool</p>
+            <p style="margin-top: 20px; opacity: 0.7;">© 2025 AI Email Summarizer Pro. All rights reserved.</p>
+        </footer>
+    </div>
+</body>
+</html>
